@@ -1,0 +1,4 @@
+{"id":"ord_1041","total":84.5,"customer":{"name":"Ada Chen","email":"ada@example.test","tier":"pro"},"items":[{"sku":"TK-01","quantity":2}],"shipping":{"tracking":"TRK-1041"},"tags":["priority"]}
+{"id":"ord_1042","total":29,"customer":{"name":"Sam Rivera","email":"sam@example.test","tier":"free"},"items":[{"sku":"NB-02","quantity":1}],"shipping":{"tracking":"TRK-1042"},"tags":["standard"]}
+{"id":"ord_1043","total":112,"customer":{"name":"Lin Park","email":"lin@example.test","tier":"pro"},"items":[{"sku":"TK-01","quantity":3}],"shipping":{"tracking":"TRK-1043"},"tags":["priority"]}
+{"id":"ord_1044","total":42,"customer":{"name":"Jo Morgan","email":"jo@example.test","tier":"free"},"items":[{"sku":"NB-02","quantity":2}],"shipping":{"tracking":"TRK-1044"},"tags":[]}

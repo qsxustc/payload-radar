@@ -1,0 +1,2 @@
+{"event":"payment.completed","data":{"amount":1200,"refunded":"false","receipt":null},"version":2}
+{"event":"payment.completed","data":{"amount":800,"refunded":true,"receipt":{"url":"https://example.test/r/3"}},"version":2}

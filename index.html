@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#f7f8fa" />
+    <meta name="description" content="Spot API payload drift before it ships. Compare JSON and JSONL samples, review shape changes, and export clear reports. Everything stays in your browser." />
+    <meta property="og:title" content="Payload Radar — Same endpoint. Different shape." />
+    <meta property="og:description" content="A local-first workspace for spotting API payload drift. Paste samples. Compare shapes. Ship with context." />
+    <meta property="og:type" content="website" />
+    <meta property="og:image" content="https://qsxustc.github.io/payload-radar/assets/demo.jpg" />
+    <meta property="og:url" content="https://qsxustc.github.io/payload-radar/" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <link rel="canonical" href="https://qsxustc.github.io/payload-radar/" />
+    <title>Payload Radar — API shape review</title>
+    <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="./src/styles.css" />
+  </head>
+  <body>
+    <a class="skip-link" href="#workspace">Skip to workspace</a>
+    <svg class="icon-definitions" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
+      <symbol id="icon-grid" viewBox="0 0 24 24"><rect x="3.5" y="3.5" width="6" height="6" rx="1.5"/><rect x="14.5" y="3.5" width="6" height="6" rx="1.5"/><rect x="3.5" y="14.5" width="6" height="6" rx="1.5"/><rect x="14.5" y="14.5" width="6" height="6" rx="1.5"/></symbol>
+      <symbol id="icon-braces" viewBox="0 0 24 24"><path d="M8 3H6a2 2 0 0 0-2 2v4l-2 3 2 3v4a2 2 0 0 0 2 2h2M16 3h2a2 2 0 0 1 2 2v4l2 3-2 3v4a2 2 0 0 1-2 2h-2"/></symbol>
+      <symbol id="icon-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M9.2 8.6a2.9 2.9 0 0 1 5.6 1c0 2-2.8 2.3-2.8 4.3M12 17h.01"/></symbol>
+      <symbol id="icon-upload" viewBox="0 0 24 24"><path d="M12 16V3m-5 5 5-5 5 5M4 15v4a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-4"/></symbol>
+      <symbol id="icon-file" viewBox="0 0 24 24"><path d="M14 3H6a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9Zm0 0v6h6M8 13h8M8 17h5"/></symbol>
+      <symbol id="icon-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+      <symbol id="icon-swap" viewBox="0 0 24 24"><path d="M4 7h16m-4-4 4 4-4 4M20 17H4m4-4-4 4 4 4"/></symbol>
+      <symbol id="icon-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/></symbol>
+      <symbol id="icon-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v4h16v-4"/></symbol>
+      <symbol id="icon-shield" viewBox="0 0 24 24"><path d="m12 3 8 3v5c0 5-8 10-8 10S4 16 4 11V6Z"/><path d="m8.5 11.5 2.5 2.5 4.5-5"/></symbol>
+    </defs></svg>
+
+    <div class="app-shell">
+      <aside class="sidebar" aria-label="Main navigation">
+        <a class="brand" href="./" aria-label="Payload Radar home"><img src="./assets/logo.svg" width="34" height="34" alt="" /><span>payload<span class="brand-second">radar</span></span></a>
+        <div class="sidebar-label">YOUR WORKBENCH</div>
+        <nav class="nav-list">
+          <a class="nav-item active" href="#workspace" aria-current="page" aria-label="Workspace"><svg class="icon"><use href="#icon-grid"/></svg><span>Workspace</span><span class="nav-active-dot"></span></a>
+          <button class="nav-item" id="examples-button" type="button" aria-label="Examples"><svg class="icon"><use href="#icon-braces"/></svg><span>Examples</span><span class="nav-shortcut">↗</span></button>
+          <button class="nav-item" id="how-it-works-button" type="button" aria-label="How it works"><svg class="icon"><use href="#icon-help"/></svg><span>How it works</span></button>
+        </nav>
+        <div class="sidebar-bottom">
+          <div class="privacy-mark"><svg class="icon"><use href="#icon-shield"/></svg><span>Private by design</span></div>
+          <p>Your payloads stay here.<br />No uploads. No accounts.<br />Just you and your data.</p>
+          <div class="sidebar-version"><span>OPEN SOURCE</span><span class="version-dot"></span><span>v0.1</span></div>
+        </div>
+      </aside>
+
+      <div class="main-shell">
+        <header class="topbar"><div class="breadcrumb"><span>Workspace</span><span class="breadcrumb-slash">/</span><strong>Contract review</strong></div><div class="session-status"><span class="status-dot"></span>Local session<svg class="icon"><use href="#icon-shield"/></svg></div></header>
+
+        <main id="workspace">
+          <section class="workspace-heading" aria-labelledby="page-title">
+            <div class="heading-copy"><div class="eyebrow"><span></span>API CHANGE INTELLIGENCE</div><h1 id="page-title">Same endpoint.<br class="mobile-break" /> <span>Different shape.</span></h1><p>Catch the changes your happy-path sample won’t show.</p></div>
+            <div class="heading-actions"><button type="button" id="demo-button" class="button button-quiet"><svg class="icon"><use href="#icon-braces"/></svg>Load example</button><button type="button" id="import-button" class="button button-outline"><svg class="icon"><use href="#icon-upload"/></svg>Import files</button></div>
+            <svg class="heading-radar" viewBox="0 0 160 160" fill="none" aria-hidden="true"><circle cx="80" cy="80" r="64"/><circle cx="80" cy="80" r="43"/><circle cx="80" cy="80" r="22"/><path d="M80 7v146M7 80h146M80 80l46-46"/><path class="radar-sector" d="M80 80V16a64 64 0 0 1 45.25 18.75Z"/><circle class="radar-point" cx="110" cy="52" r="4"/><circle class="radar-point secondary" cx="49" cy="99" r="3"/></svg>
+          </section>
+
+          <section class="input-section" aria-labelledby="input-title">
+            <div class="section-topline"><div class="section-title"><span class="step-number">01</span><h2 id="input-title">Bring your samples</h2><span class="section-hint">One endpoint. Two moments in time.</span></div><label class="format-label" for="input-format">Input format <select id="input-format"><option value="jsonl" selected>JSON Lines</option><option value="json">JSON</option></select></label></div>
+            <div class="input-grid">
+              <article class="payload-card before-card"><div class="payload-card-header"><div class="payload-label"><span class="payload-dot"></span><h3>Before</h3><span class="payload-caption">BASELINE</span></div><button type="button" class="button button-upload" data-upload="before" aria-label="Upload before payload"><svg class="icon"><use href="#icon-upload"/></svg>Upload</button></div><div class="filename-bar"><svg class="icon"><use href="#icon-file"/></svg><span id="before-name">before.jsonl</span><span class="editor-language">JSONL</span></div><div class="editor-wrap"><div class="editor-gutter" aria-hidden="true">01<br/>02<br/>03<br/>04<br/>05<br/>06<br/>07<br/>08<br/>09</div><textarea id="before-input" aria-label="Before payload samples" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder='{"id": 1, "name": "Ada"}'></textarea></div><div class="editor-footer"><span class="editor-footer-mark">{ }</span><span>Paste a sample or drop a file</span><span class="editor-local">Stays on device</span></div><input type="file" id="before-file" accept=".json,.jsonl,.ndjson,application/json,text/plain" hidden /></article>
+              <div class="input-connector" aria-hidden="true"><svg class="icon"><use href="#icon-arrow"/></svg></div>
+              <article class="payload-card after-card"><div class="payload-card-header"><div class="payload-label"><span class="payload-dot"></span><h3>After</h3><span class="payload-caption">CANDIDATE</span></div><button type="button" class="button button-upload" data-upload="after" aria-label="Upload after payload"><svg class="icon"><use href="#icon-upload"/></svg>Upload</button></div><div class="filename-bar"><svg class="icon"><use href="#icon-file"/></svg><span id="after-name">after.jsonl</span><span class="editor-language">JSONL</span></div><div class="editor-wrap"><div class="editor-gutter" aria-hidden="true">01<br/>02<br/>03<br/>04<br/>05<br/>06<br/>07<br/>08<br/>09</div><textarea id="after-input" aria-label="After payload samples" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder='{"id": "1", "name": "Ada", "active": true}'></textarea></div><div class="editor-footer"><span class="editor-footer-mark">{ }</span><span>Paste a sample or drop a file</span><span class="editor-local">Stays on device</span></div><input type="file" id="after-file" accept=".json,.jsonl,.ndjson,application/json,text/plain" hidden /></article>
+            </div>
+            <div class="input-toolbar"><div class="toolbar-buttons"><button type="button" id="compare-button" class="button button-primary"><svg class="icon"><use href="#icon-grid"/></svg>Compare payloads<svg class="icon arrow-icon"><use href="#icon-arrow"/></svg></button><button type="button" id="swap-button" class="button button-quiet"><svg class="icon"><use href="#icon-swap"/></svg>Swap</button><button type="button" id="clear-button" class="button button-quiet">Clear</button></div><div id="input-status" class="input-status" role="status" aria-live="polite">Ready when you are.</div></div>
+            <div id="error-message" class="error-message" role="alert" hidden></div>
+          </section>
+
+          <section id="results" class="results-section" aria-labelledby="results-title">
+            <div class="section-topline result-topline"><div class="section-title"><span class="step-number">02</span><h2 id="results-title">The shape of change</h2><span class="section-hint">Evidence, before assumptions.</span></div><span class="analysis-label"><span class="status-dot"></span>Sample-based analysis</span></div>
+            <div id="summary-cards" class="summary-cards"></div>
+            <div class="result-grid"><section class="findings-panel" aria-labelledby="findings-title"><div class="findings-header"><h3 id="findings-title">Shape changes</h3><label class="search-field"><svg class="icon"><use href="#icon-search"/></svg><input id="change-search" type="search" placeholder="Filter paths…" aria-label="Filter shape changes by path" /></label></div><div id="severity-filters" class="severity-filters" aria-label="Filter changes by severity"><button type="button" data-severity="all" class="active" aria-pressed="true">All changes</button><button type="button" data-severity="risk" aria-pressed="false"><span class="filter-dot risk"></span>Risk</button><button type="button" data-severity="review" aria-pressed="false"><span class="filter-dot review"></span>Review</button><button type="button" data-severity="info" aria-pressed="false"><span class="filter-dot info"></span>Info</button></div><div id="change-list" class="change-list" aria-live="polite"></div></section><aside id="detail-panel" class="detail-panel" aria-label="Change evidence"></aside></div>
+            <section id="coverage-panel" class="coverage-panel" aria-label="Sample coverage"></section>
+            <div class="export-bar"><div class="export-copy"><svg class="icon"><use href="#icon-download"/></svg><div><strong>Take the context with you.</strong><span>Make the next review a little clearer.</span></div></div><div class="export-actions"><button type="button" id="export-report" class="button button-outline">Markdown report<svg class="icon"><use href="#icon-download"/></svg></button><button type="button" id="export-json" class="button button-quiet">JSON report</button><button type="button" id="export-schema" class="button button-quiet">Candidate schema</button></div></div>
+          </section>
+          <footer class="workspace-footer"><span>Built for the review before the release.</span><a href="https://github.com/qsxustc/payload-radar" class="github-link" target="_blank" rel="noopener noreferrer" aria-label="View Payload Radar on GitHub">GitHub ↗</a><button type="button" id="method-button">How we read your samples <span aria-hidden="true">↗</span></button></footer>
+        </main>
+      </div>
+    </div>
+
+    <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title"><div class="dialog-eyebrow">THE METHOD</div><h2 id="help-title">Read shapes, not values.</h2><p>Payload Radar compares the structure observed across your samples: field paths, types, presence, and array items. It helps you spot changes that deserve a closer look before a release.</p><div class="help-points"><section><span>01</span><div><h3>Bring more than one sample</h3><p>Choose JSON Lines for one JSON value per non-empty line. Choose JSON for a single document; a top-level array remains one document, and its items are analyzed together.</p></div></section><section><span>02</span><div><h3>Evidence has limits</h3><p>An observed field is not a guaranteed contract. Missing fields, small samples, and empty arrays can limit what we know. Review the evidence alongside your API specification.</p></div></section><section><span>03</span><div><h3>Your data stays yours</h3><p>Analysis happens in this browser. No payloads are sent to a server. Reports contain field paths, types and counts, but no raw sample values. Review field names before sharing.</p></div></section></div><form method="dialog"><button class="button button-primary" type="submit">Got it<svg class="icon"><use href="#icon-arrow"/></svg></button></form></dialog>
+    <script type="module" src="./src/app.js"></script>
+  </body>
+</html>
