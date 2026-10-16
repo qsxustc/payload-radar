@@ -1,19 +1,21 @@
 <p align="center"><img src="assets/logo.svg" alt="Payload Radar" width="80"></p>
 <h1 align="center">Payload Radar</h1>
-<p align="center"><strong>Your JSON changed. See what your code might trip over.</strong></p>
-<p align="center">A local-first payload shape inspector · Browser + CLI · Zero dependencies · MIT</p>
+<p align="center"><strong>Your API changed. Does your app care?</strong></p>
+<p align="center">Consumer Lens + JSON drift inspector · Browser + CLI · Zero dependencies · MIT</p>
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="https://qsxustc.github.io/payload-radar/"><strong>Try the live demo</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
+<p align="center"><a href="https://qsxustc.github.io/payload-radar/?lens=checkout"><strong>Try Consumer Lens</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
 
-Compare JSON or JSON Lines samples before and after an API change. Payload Radar highlights new value types, fields no longer observed, nullability and field-presence changes, then shows the local evidence behind each finding.
+A payload can drift in nine places while your checkout only depends on two fields. **Consumer Lens** lets you select those fields, state the types and presence your code needs, and check candidate samples against that small, portable set of rules.
 
-An order total changing from `84.5` to `"84.50"` can break a calculation. A different order ID usually does not. Payload Radar focuses on that distinction so you can review structural drift without reading a wall of value diffs.
+Pick `total` and `items[].quantity` as required numbers. A changed shipment field stays outside your focus; `total: "84.50"` fails your selected rule. Export a value-free `.lens.json` file, commit it next to your code, and run the same check in CI—with no baseline payload, backend, API key or dependencies.
 
-![Payload Radar showing checkout API changes and sample evidence](assets/demo.jpg)
+The original before/after inspector is still here: compare JSON or JSON Lines samples, review structural drift, and inspect the local evidence behind each finding. A lens adds an explicit consumer perspective; you decide which fields matter.
+
+![Consumer Lens narrows nine checkout findings to two dependent fields and shows candidate rule violations](assets/consumer-demo.jpg)
 
 ## Try it in a minute
 
-Open the [live demo](https://qsxustc.github.io/payload-radar/) to explore immediately. Or run it locally:
+Open the [Consumer Lens demo](https://qsxustc.github.io/payload-radar/?lens=checkout) to explore immediately. Or run it locally:
 
 ```sh
 git clone https://github.com/qsxustc/payload-radar.git
@@ -31,8 +33,37 @@ node bin/payload-radar.js \
   --format jsonl
 ```
 
+## From noisy drift to a consumer check
+
+1. Load baseline and candidate JSON/JSONL samples in the [workbench](https://qsxustc.github.io/payload-radar/?lens=checkout).
+2. In **Consumer Lens**, select only fields the consuming code reads. Baseline observations help you start; review the allowed types and whether each field is required.
+3. Inspect candidate violations and focus the drift list on related paths. A container rule checks that container's type; add child rules for child fields you depend on.
+4. Export the `.lens.json` file. It contains the lens name and explicit rules, without sample values or the complete inferred baseline shape. Import it in another session, or commit it for CI.
+
+Already have a lens? Import it and load **only the candidate**; the baseline can stay empty. **Clear inputs** keeps the current lens so you can check a new response without rebuilding your rules. Baseline/candidate drift is available when both sides are loaded; candidate-only mode reports the consumer check. Markdown and JSON review exports include that check.
+
+After downloading a lens from the browser, check a new payload with one command:
+
+```sh
+node bin/payload-radar.js check consumer.lens.json candidate.jsonl --format jsonl
+```
+
+For a reproducible example included in the repository:
+
+```sh
+node bin/payload-radar.js check \
+  examples/checkout.lens.json examples/checkout-after.jsonl \
+  --format jsonl --output checkout-review.md
+# Writes the report, then exits 1: the candidate violates a selected rule.
+```
+
+**Optional means a field may be missing.** A present `null` still fails unless `null` is an allowed type. An optional field never observed at all is marked **review**. Empty arrays provide no item observations: an item rule with no observed values returns **review**, without inventing missing children. The default gate fails on observed violations; use `--fail-on review` to also fail when a rule has no observations.
+
+A passing lens means these candidate samples met your chosen rules. It does not prove every future response, the rest of the payload, or the complete API contract is compatible.
+
 ## What you get
 
+- **Consumer Lens:** select dependent paths, edit allowed types and required presence, inspect candidate rule results, and export/import portable value-free rules.
 - **Structural findings:** missing observed fields, new fields, new value types, first-observed nulls, presence shifts and empty-array evidence gaps.
 - **Evidence you can inspect:** select a finding to see observed values and absence locations, with sample numbers and paths. The inspector displays up to six observations per side.
 - **A focused review:** severity filters, path search, before/after presence counts, and coverage notes.
@@ -59,11 +90,12 @@ Object property presence is counted within observed objects at its immediate par
 
 ```text
 payload-radar <before-file> <after-file> [options]
+payload-radar check <consumer.lens.json> <candidate-file> [options]
 
 --format json|jsonl             default: json
 --report markdown|json          default: markdown
---fail-on risk|review|any|none   default: none
---schema                       export the candidate JSON Schema draft
+--fail-on risk|review|any|none   diff default: none; check default: risk
+--schema                       export the candidate JSON Schema draft (diff only)
 --output <path>                write a new file; existing files are never overwritten
 --help, -h
 ```
@@ -84,9 +116,32 @@ node bin/payload-radar.js before.json after.json --schema --output candidate.sch
 node bin/payload-radar.js before.json after.json --fail-on review --output review.md
 ```
 
-`--fail-on review` includes both `risk` and `review`; `any` includes informational findings too. Reports are written before evaluating the gate, so a failing gate still leaves its report available. `--schema` cannot be combined with an explicit `--report`. Schema mode still takes both input files and applies the requested comparison gate.
+In **diff mode**, `--fail-on review` includes both `risk` and `review`; `any` includes informational findings too. In **check mode**, the default `risk` gate fails on rule violations; `review` and `any` also fail when a rule has no observed values. `none` disables either gate. Reports are written before evaluating the gate, so a failing gate still leaves its report available. `--schema` cannot be combined with an explicit `--report`. Schema mode still takes both input files and applies the requested comparison gate. Check mode rejects `--schema`; its `--format` applies to the candidate only, because a lens is always JSON. Use `-- check after.json` to compare a baseline file literally named `check`.
 
-Exit codes: **0** for success or a passing gate, **1** for a requested gate with matching findings, **2** for invalid arguments, invalid inputs or I/O errors. Input files must be regular files; final file symlinks are rejected. Parent directory symlinks such as macOS `/tmp` are supported. Output files are created exclusively and cannot overwrite either input or an existing output.
+Exit codes: **0** for success or a passing gate, **1** for a requested gate with matching findings, **2** for invalid arguments, invalid inputs or I/O errors. Candidate and diff input files are limited to 2 MiB; lens files are limited to 256 KiB. Input files must be regular files; final file symlinks are rejected. Parent directory symlinks such as macOS `/tmp` are supported. Output files are created exclusively and cannot overwrite either input or an existing output.
+
+## GitHub Actions: use the lens in your app's CI
+
+Export a lens into your application's repository and provide candidate samples checked out or generated by an earlier step. Save a workflow such as `.github/workflows/payload-check.yml`:
+
+```yaml
+name: Check consumed payload fields
+on: [push, pull_request]
+permissions:
+  contents: read
+jobs:
+  consumer-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: qsxustc/payload-radar@v0.2.0
+        with:
+          lens: contracts/checkout.lens.json
+          candidate: fixtures/checkout-after.jsonl
+          format: jsonl
+```
+
+Paths are relative to your checked-out workspace. The action sets up Node.js 22 and runs the shared CLI directly from its action checkout; you do not need to clone Payload Radar or install dependencies in your app. It fails on observed rule violations by default. Optional inputs are `fail-on` (`risk`, `review`, `any`, `none`), `report` (`markdown` or `json`) and `output` (a **new** local report path). Reports go to the job log unless `output` is provided. The action checks local fixtures; fetching candidate payloads belongs in your own earlier workflow step.
 
 ## Use the engine
 
@@ -112,15 +167,38 @@ console.log(toMarkdown({
 
 Findings include a human-readable `path`, a pointer-like `pointer`, typed `tokens`, a severity, a kind, observed types and presence counts. A `null` token represents an array item; string tokens are literal property names. For traversing data, prefer `tokens`: display paths and array wildcard pointers are not concrete JSON Pointers. See [architecture](docs/architecture.md) for details.
 
+### Consumer Lens API
+
+```js
+import { parseInput } from './src/core.js';
+import { normalizeLens, checkLens, serializeLens, lensMarkdown } from './src/consumer.js';
+
+const lens = normalizeLens({
+  kind: 'payload-radar-consumer',
+  schemaVersion: 1,
+  name: 'Checkout',
+  rules: [
+    { tokens: ['total'], types: ['number'], required: true },
+    { tokens: ['items', null, 'quantity'], types: ['number'], required: true },
+  ],
+});
+const report = checkLens(lens, parseInput('{"total":"84.50"}', 'json'));
+console.log(report.status); // fail
+console.log(lensMarkdown(report));
+console.log(serializeLens(lens)); // no raw sample values or baseline shape
+```
+
+For package imports, the main entry remains `payload-radar`; the consumer module is also exported as `payload-radar/consumer`. A lens supports the six JSON types (`array`, `boolean`, `null`, `number`, `object`, `string`), at most **100 rules**, and a name of at most **80 UTF-16 code units**. Typed tokens use the same property and array-item representation as findings. `parseLens` validates imported text; `normalizeLens` validates programmatic input. The [architecture](docs/architecture.md) documents path limits and check semantics.
+
 ## Know the limits
 
-**This is sample inference, not a verified API contract.** A missing field may simply be absent from your chosen examples. An unchanged result does not prove compatibility. Severity labels prioritize human review; they are not a guarantee that a consumer will break or remain safe.
+**Diff results are sample inference; Consumer Lens rules are explicit assumptions you choose, not proof of an API contract.** A missing field may simply be absent from your chosen examples. An unchanged result does not prove compatibility. Severity labels prioritize human review; they are not a guarantee that a consumer will break or remain safe.
 
 - Empty arrays establish the `array` type but provide no evidence about their items. Reduced item evidence is surfaced for review instead of pretending it proves a field removal.
 - Value-only changes, enums, formats, number ranges, tuple positions, discriminators and cross-field rules are outside this release's analysis.
 - Numbers use JavaScript number precision, and all finite numbers share the `number` type. Large integer identifiers should be encoded as strings when exact precision matters. The tool does not infer `integer` separately.
 - Generated JSON Schema describes observed candidate samples. Fields seen in every parent object are marked `required`; that is an observation, not proof they are required by the API. Additional properties remain allowed. Review the draft before using it as a contract.
-- The page and assets are fetched from the hosting provider, but payload content stays in the current tab. Refreshing closes that in-memory workspace. Exports omit raw sample values, but field names, file names and structural findings can still be sensitive.
+- The page and assets are fetched from the hosting provider, but payload content and lenses stay in the current tab. Neither is persisted in browser storage. Refreshing closes that in-memory workspace; export a lens to keep it and import it later. Exports omit raw sample values, but field names, file names and structural findings can still be sensitive.
 
 ## Develop and deploy
 

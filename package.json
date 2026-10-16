@@ -1,18 +1,18 @@
 {
   "name": "payload-radar",
-  "version": "0.1.0",
-  "description": "Spot structural changes between JSON payloads before they surprise your code.",
+  "version": "0.2.0",
+  "description": "Check JSON drift through the fields your code actually consumes. Browser + zero-dependency CLI.",
   "type": "module",
   "license": "MIT",
   "engines": { "node": ">=20" },
   "bin": { "payload-radar": "bin/payload-radar.js" },
-  "exports": { ".": "./src/core.js" },
-  "files": ["bin", "src/core.js", "README.md", "README.zh-CN.md", "LICENSE"],
+  "exports": { ".": "./src/core.js", "./consumer": "./src/consumer.js" },
+  "files": ["bin", "src/core.js", "src/consumer.js", "README.md", "README.zh-CN.md", "LICENSE"],
   "scripts": {
     "dev": "node scripts/serve.mjs",
     "build": "node scripts/build.mjs",
     "preview": "node scripts/serve.mjs --dist",
     "test": "node --test"
   },
-  "keywords": ["json", "json-schema", "schema-diff", "api", "developer-tools", "local-first"]
+  "keywords": ["json", "json-schema", "schema-diff", "api", "consumer-contract", "ci", "developer-tools", "local-first"]
 }

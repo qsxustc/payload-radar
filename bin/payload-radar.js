@@ -3,29 +3,41 @@ import { constants } from 'node:fs';
 import { open, lstat, realpath } from 'node:fs/promises';
 import path from 'node:path';
 import { parseInput, inferShape, compareShapes, toJSONSchema, toMarkdown } from '../src/core.js';
+import { parseLens, checkLens, lensMarkdown } from '../src/consumer.js';
 
 const MAX_BYTES = 2 * 1024 * 1024;
-const HELP = `Payload Radar — inspect structural changes between JSON samples
+const LENS_MAX_BYTES = 256 * 1024;
+const HELP = `Payload Radar — inspect JSON drift and check the fields your code consumes
 
 Usage: payload-radar <before-file> <after-file> [options]
+       payload-radar check <consumer.lens.json> <candidate-file> [options]
 
 Options:
   --format json|jsonl             Input format for both files (default: json)
   --report markdown|json          Report format (default: markdown)
-  --fail-on risk|review|any|none   Exit 1 when matching changes exist (default: none)
-  --schema                       Emit JSON Schema inferred from the after samples
+  --fail-on risk|review|any|none   CI gate (diff default: none; check default: risk)
+  --schema                       Emit candidate JSON Schema (diff mode only)
   --output <path>                Write a new file instead of stdout; never overwrite
   --help, -h                     Show this help
 
 --schema and an explicit --report cannot be combined.
---fail-on review gates risk and review changes; any gates every change.
+In diff mode, review gates risk and review changes; any gates every change.
+In check mode, risk gates rule violations; review and any also gate unobserved
+rules (for example, item rules with only empty arrays); none disables the gate.
+Check reads an explicit Consumer Lens, not an inferred API contract. Missing
+optional fields do not violate rules; present nulls require an allowed null type.
+--format applies only to the candidate file in check mode. Lens files are JSON.
 JSON is one sample per file. JSONL is one sample per nonempty line.
 Input files must be regular files, at most 2 MiB each; file symlinks are rejected.
+Consumer Lens files must be at most 256 KiB. Outputs never replace either input.
+Use -- check <after-file> to compare a baseline file literally named check.
 Exit codes: 0 success, 1 requested gate detected, 2 invalid input or I/O error.
 `;
 
 function parseArguments(args) {
-  const options = { format: 'json', report: 'markdown', failOn: 'none', schema: false, output: null, files: [] };
+  const mode = args[0] === 'check' ? 'check' : 'diff';
+  if (mode === 'check') args = args.slice(1);
+  const options = { mode, format: 'json', report: 'markdown', failOn: mode === 'check' ? 'risk' : 'none', schema: false, output: null, files: [] };
   let explicitReport = false;
   let positionalOnly = false;
   const seen = new Set();
@@ -50,6 +62,7 @@ function parseArguments(args) {
   if (!['json', 'jsonl'].includes(options.format)) throw new Error('--format must be json or jsonl.');
   if (!['markdown', 'json'].includes(options.report)) throw new Error('--report must be markdown or json.');
   if (!['risk', 'review', 'any', 'none'].includes(options.failOn)) throw new Error('--fail-on must be risk, review, any, or none.');
+  if (options.mode === 'check' && options.schema) throw new Error('--schema is not available in check mode.');
   if (options.schema && explicitReport) throw new Error('--schema cannot be combined with --report.');
   return options;
 }
@@ -63,18 +76,18 @@ async function inputPath(filename) {
   return path.join(parent, path.basename(absolute));
 }
 
-async function readInput(filename) {
+async function readInput(filename, maxBytes = MAX_BYTES, limitLabel = '2 MiB') {
   const absolute = await inputPath(filename);
   const handle = await open(absolute, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0));
   try {
     const stat = await handle.stat();
     if (!stat.isFile()) throw new Error(`Input must be a regular file: ${filename}`);
-    if (stat.size > MAX_BYTES) throw new Error(`Input exceeds 2 MiB: ${filename}`);
+    if (stat.size > maxBytes) throw new Error(`Input exceeds ${limitLabel}: ${filename}`);
     const chunks = [];
     let size = 0;
     for await (const chunk of handle.createReadStream({ autoClose: false })) {
       size += chunk.length;
-      if (size > MAX_BYTES) throw new Error(`Input exceeds 2 MiB: ${filename}`);
+      if (size > maxBytes) throw new Error(`Input exceeds ${limitLabel}: ${filename}`);
       chunks.push(chunk);
     }
     return { text: new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)), absolute };
@@ -96,6 +109,20 @@ async function writeOutput(filename, output, inputPaths) {
 async function main() {
   const options = parseArguments(process.argv.slice(2));
   if (options.help) { process.stdout.write(HELP); return; }
+  if (options.mode === 'check') {
+    const lensInput = await readInput(options.files[0], LENS_MAX_BYTES, '256 KiB');
+    const candidateInput = await readInput(options.files[1]);
+    const lens = parseLens(lensInput.text);
+    const report = checkLens(lens, parseInput(candidateInput.text, options.format));
+    const output = options.report === 'json' ? `${JSON.stringify(report, null, 2)}\n` : `${lensMarkdown(report).trimEnd()}\n`;
+    if (options.output) await writeOutput(options.output, output, [lensInput.absolute, candidateInput.absolute]);
+    else process.stdout.write(output);
+    const gated = options.failOn === 'none' ? false
+      : options.failOn === 'risk' ? report.violations > 0
+        : report.violations > 0 || report.unobservedRules > 0;
+    if (gated) process.exitCode = 1;
+    return;
+  }
   const beforeInput = await readInput(options.files[0]);
   const afterInput = await readInput(options.files[1]);
   const beforeSamples = parseInput(beforeInput.text, options.format);

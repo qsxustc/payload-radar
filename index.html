@@ -4,15 +4,15 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="theme-color" content="#f7f8fa" />
-    <meta name="description" content="Spot API payload drift before it ships. Compare JSON and JSONL samples, review shape changes, and export clear reports. Everything stays in your browser." />
-    <meta property="og:title" content="Payload Radar — Same endpoint. Different shape." />
-    <meta property="og:description" content="A local-first workspace for spotting API payload drift. Paste samples. Compare shapes. Ship with context." />
+    <meta name="description" content="Your API changed. Does your app care? Compare JSON samples, declare the fields your consumer relies on, and export value-free checks for CI. Everything stays local." />
+    <meta property="og:title" content="Payload Radar — Your API changed. Does your app care?" />
+    <meta property="og:description" content="Compare real JSON samples, protect the fields your app relies on, and carry those checks into CI. Local-first. Zero dependencies." />
     <meta property="og:type" content="website" />
-    <meta property="og:image" content="https://qsxustc.github.io/payload-radar/assets/demo.jpg" />
+    <meta property="og:image" content="https://qsxustc.github.io/payload-radar/assets/consumer-demo.jpg" />
     <meta property="og:url" content="https://qsxustc.github.io/payload-radar/" />
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="canonical" href="https://qsxustc.github.io/payload-radar/" />
-    <title>Payload Radar — API shape review</title>
+    <title>Payload Radar — Consumer Lens &amp; API shape review</title>
     <link rel="icon" href="./assets/logo.svg" type="image/svg+xml" />
     <link rel="stylesheet" href="./src/styles.css" />
   </head>
@@ -43,7 +43,7 @@
         <div class="sidebar-bottom">
           <div class="privacy-mark"><svg class="icon"><use href="#icon-shield"/></svg><span>Private by design</span></div>
           <p>Your payloads stay here.<br />No uploads. No accounts.<br />Just you and your data.</p>
-          <div class="sidebar-version"><span>OPEN SOURCE</span><span class="version-dot"></span><span>v0.1</span></div>
+          <div class="sidebar-version"><span>OPEN SOURCE</span><span class="version-dot"></span><span>v0.2</span></div>
         </div>
       </aside>
 
@@ -52,7 +52,7 @@
 
         <main id="workspace">
           <section class="workspace-heading" aria-labelledby="page-title">
-            <div class="heading-copy"><div class="eyebrow"><span></span>API CHANGE INTELLIGENCE</div><h1 id="page-title">Same endpoint.<br class="mobile-break" /> <span>Different shape.</span></h1><p>Catch the changes your happy-path sample won’t show.</p></div>
+            <div class="heading-copy"><div class="eyebrow"><span></span>API CHANGE INTELLIGENCE</div><h1 id="page-title">Same endpoint.<br class="mobile-break" /> <span>Different shape.</span></h1><p>Find the API changes that matter to the fields your app actually uses.</p></div>
             <div class="heading-actions"><button type="button" id="demo-button" class="button button-quiet"><svg class="icon"><use href="#icon-braces"/></svg>Load example</button><button type="button" id="import-button" class="button button-outline"><svg class="icon"><use href="#icon-upload"/></svg>Import files</button></div>
             <svg class="heading-radar" viewBox="0 0 160 160" fill="none" aria-hidden="true"><circle cx="80" cy="80" r="64"/><circle cx="80" cy="80" r="43"/><circle cx="80" cy="80" r="22"/><path d="M80 7v146M7 80h146M80 80l46-46"/><path class="radar-sector" d="M80 80V16a64 64 0 0 1 45.25 18.75Z"/><circle class="radar-point" cx="110" cy="52" r="4"/><circle class="radar-point secondary" cx="49" cy="99" r="3"/></svg>
           </section>
@@ -64,13 +64,28 @@
               <div class="input-connector" aria-hidden="true"><svg class="icon"><use href="#icon-arrow"/></svg></div>
               <article class="payload-card after-card"><div class="payload-card-header"><div class="payload-label"><span class="payload-dot"></span><h3>After</h3><span class="payload-caption">CANDIDATE</span></div><button type="button" class="button button-upload" data-upload="after" aria-label="Upload after payload"><svg class="icon"><use href="#icon-upload"/></svg>Upload</button></div><div class="filename-bar"><svg class="icon"><use href="#icon-file"/></svg><span id="after-name">after.jsonl</span><span class="editor-language">JSONL</span></div><div class="editor-wrap"><div class="editor-gutter" aria-hidden="true">01<br/>02<br/>03<br/>04<br/>05<br/>06<br/>07<br/>08<br/>09</div><textarea id="after-input" aria-label="After payload samples" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder='{"id": "1", "name": "Ada", "active": true}'></textarea></div><div class="editor-footer"><span class="editor-footer-mark">{ }</span><span>Paste a sample or drop a file</span><span class="editor-local">Stays on device</span></div><input type="file" id="after-file" accept=".json,.jsonl,.ndjson,application/json,text/plain" hidden /></article>
             </div>
-            <div class="input-toolbar"><div class="toolbar-buttons"><button type="button" id="compare-button" class="button button-primary"><svg class="icon"><use href="#icon-grid"/></svg>Compare payloads<svg class="icon arrow-icon"><use href="#icon-arrow"/></svg></button><button type="button" id="swap-button" class="button button-quiet"><svg class="icon"><use href="#icon-swap"/></svg>Swap</button><button type="button" id="clear-button" class="button button-quiet">Clear</button></div><div id="input-status" class="input-status" role="status" aria-live="polite">Ready when you are.</div></div>
+            <div class="input-toolbar"><div class="toolbar-buttons"><button type="button" id="compare-button" class="button button-primary"><svg class="icon"><use href="#icon-grid"/></svg>Compare payloads<svg class="icon arrow-icon"><use href="#icon-arrow"/></svg></button><button type="button" id="swap-button" class="button button-quiet"><svg class="icon"><use href="#icon-swap"/></svg>Swap</button><button type="button" id="clear-button" class="button button-quiet">Clear inputs</button></div><div id="input-status" class="input-status" role="status" aria-live="polite">Ready when you are.</div></div>
             <div id="error-message" class="error-message" role="alert" hidden></div>
           </section>
 
           <section id="results" class="results-section" aria-labelledby="results-title">
             <div class="section-topline result-topline"><div class="section-title"><span class="step-number">02</span><h2 id="results-title">The shape of change</h2><span class="section-hint">Evidence, before assumptions.</span></div><span class="analysis-label"><span class="status-dot"></span>Sample-based analysis</span></div>
             <div id="summary-cards" class="summary-cards"></div>
+            <section id="consumer-panel" class="consumer-panel" aria-labelledby="consumer-title">
+              <div class="consumer-header">
+                <div class="consumer-heading"><div class="eyebrow"><span></span>CONSUMER LENS</div><h3 id="consumer-title">Your API changed. Does your app care?</h3><p>Declare the fields your consumer relies on. Carry those checks into CI.</p></div>
+                <div class="consumer-actions"><button type="button" id="lens-export" class="button button-outline" disabled>Export lens<svg class="icon"><use href="#icon-download"/></svg></button><button type="button" id="lens-import" class="button button-quiet">Import lens</button><button type="button" id="lens-demo" class="button button-quiet">Try Checkout UI</button><button type="button" id="lens-email-demo" class="button button-quiet">Try Order email</button></div>
+              </div>
+              <div class="consumer-toolbar">
+                <label class="lens-input-label" for="lens-name">Consumer name<input id="lens-name" type="text" maxlength="80" value="Checkout UI" autocomplete="off" /></label>
+                <label class="lens-input-label lens-field-label" for="lens-field">Add a field from baseline<select id="lens-field"><option value="">Choose a field…</option></select></label>
+                <button type="button" id="lens-add" class="button button-primary">Protect field</button><button type="button" id="lens-clear" class="button button-quiet">Clear lens</button>
+              </div>
+              <div id="lens-status" class="lens-status" role="status" aria-live="polite">Choose the fields your app uses, then review their explicit checks.</div>
+              <div id="lens-check-summary"></div>
+              <div id="lens-rule-list" class="lens-rule-list"><p class="lens-empty">Start with a field from your baseline, or try a consumer example.</p></div>
+              <div class="consumer-footer"><label class="lens-focus-label" for="lens-focus"><input id="lens-focus" type="checkbox" />Focus related shape changes</label><span id="lens-relevance" class="lens-relevance"></span><p>Optional rules allow a field to be missing. A present null needs the null type. Protecting a container does not protect its children automatically.</p><details class="lens-ci"><summary>From browser to CI</summary><p>Export your lens, commit it with a representative candidate fixture, and add these steps to a GitHub Actions job. A field violation fails the check. Lens files contain field names and assumptions, so review them before sharing.</p><pre id="lens-ci-snippet"></pre></details></div>
+            </section>
             <div class="result-grid"><section class="findings-panel" aria-labelledby="findings-title"><div class="findings-header"><h3 id="findings-title">Shape changes</h3><label class="search-field"><svg class="icon"><use href="#icon-search"/></svg><input id="change-search" type="search" placeholder="Filter paths…" aria-label="Filter shape changes by path" /></label></div><div id="severity-filters" class="severity-filters" aria-label="Filter changes by severity"><button type="button" data-severity="all" class="active" aria-pressed="true">All changes</button><button type="button" data-severity="risk" aria-pressed="false"><span class="filter-dot risk"></span>Risk</button><button type="button" data-severity="review" aria-pressed="false"><span class="filter-dot review"></span>Review</button><button type="button" data-severity="info" aria-pressed="false"><span class="filter-dot info"></span>Info</button></div><div id="change-list" class="change-list" aria-live="polite"></div></section><aside id="detail-panel" class="detail-panel" aria-label="Change evidence"></aside></div>
             <section id="coverage-panel" class="coverage-panel" aria-label="Sample coverage"></section>
             <div class="export-bar"><div class="export-copy"><svg class="icon"><use href="#icon-download"/></svg><div><strong>Take the context with you.</strong><span>Make the next review a little clearer.</span></div></div><div class="export-actions"><button type="button" id="export-report" class="button button-outline">Markdown report<svg class="icon"><use href="#icon-download"/></svg></button><button type="button" id="export-json" class="button button-quiet">JSON report</button><button type="button" id="export-schema" class="button button-quiet">Candidate schema</button></div></div>
@@ -80,7 +95,15 @@
       </div>
     </div>
 
-    <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title"><div class="dialog-eyebrow">THE METHOD</div><h2 id="help-title">Read shapes, not values.</h2><p>Payload Radar compares the structure observed across your samples: field paths, types, presence, and array items. It helps you spot changes that deserve a closer look before a release.</p><div class="help-points"><section><span>01</span><div><h3>Bring more than one sample</h3><p>Choose JSON Lines for one JSON value per non-empty line. Choose JSON for a single document; a top-level array remains one document, and its items are analyzed together.</p></div></section><section><span>02</span><div><h3>Evidence has limits</h3><p>An observed field is not a guaranteed contract. Missing fields, small samples, and empty arrays can limit what we know. Review the evidence alongside your API specification.</p></div></section><section><span>03</span><div><h3>Your data stays yours</h3><p>Analysis happens in this browser. No payloads are sent to a server. Reports contain field paths, types and counts, but no raw sample values. Review field names before sharing.</p></div></section></div><form method="dialog"><button class="button button-primary" type="submit">Got it<svg class="icon"><use href="#icon-arrow"/></svg></button></form></dialog>
+    <dialog id="help-dialog" class="help-dialog" aria-labelledby="help-title"><div class="dialog-eyebrow">THE METHOD</div><h2 id="help-title">Read shapes, not values.</h2><p>Payload Radar compares the structure observed across your samples: field paths, types, presence, and array items. It helps you spot changes that deserve a closer look before a release.</p><div class="help-points"><section><span>01</span><div><h3>Bring more than one sample</h3><p>Choose JSON Lines for one JSON value per non-empty line. Choose JSON for a single document; a top-level array remains one document, and its items are analyzed together.</p></div></section><section><span>02</span><div><h3>Evidence has limits</h3><p>An observed field is not a guaranteed contract. Missing fields, small samples, and empty arrays can limit what we know. Review the evidence alongside your API specification.</p></div></section><section><span>03</span><div><h3>Protect what your consumer needs</h3><p>Consumer Lens checks the allowed types and required status you explicitly select for each field. It does not inspect your app’s code. A container rule does not automatically check its children. Export a lens to run the same checks in CI without raw sample values.</p></div></section><section><span>04</span><div><h3>Your data stays yours</h3><p>Analysis happens in this browser. No payloads are sent to a server. Reports and exported lenses contain field paths, types and counts, but no raw sample values. Review field names before sharing.</p></div></section></div><form method="dialog"><button class="button button-primary" type="submit">Got it<svg class="icon"><use href="#icon-arrow"/></svg></button></form></dialog>
+    <dialog id="lens-import-dialog" class="help-dialog lens-import-dialog" aria-labelledby="lens-import-title">
+      <div class="dialog-eyebrow">CONSUMER LENS</div><h2 id="lens-import-title">Bring your checks back.</h2><p>Import an exported lens to review its rules and check the current candidate samples.</p>
+      <label class="lens-input-label" for="lens-json-input">Consumer Lens JSON<textarea id="lens-json-input" rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" placeholder="Paste exported Consumer Lens JSON here"></textarea></label>
+      <p id="lens-import-error" class="error-message" role="alert" hidden></p>
+      <div class="lens-import-actions"><button type="button" id="lens-pick-file" class="button button-outline">Choose .lens.json file</button><button type="button" id="lens-apply-import" class="button button-primary">Import checks</button></div>
+      <input type="file" id="lens-file" accept=".json,application/json" hidden />
+      <form method="dialog"><button class="button button-quiet" type="submit">Cancel</button></form>
+    </dialog>
     <script type="module" src="./src/app.js"></script>
   </body>
 </html>

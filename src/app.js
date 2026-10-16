@@ -1,6 +1,8 @@
 import { parseInput, inferShape, compareShapes, toJSONSchema, toMarkdown } from './core.js';
 import { demos, demoText } from './demo.js';
 import { collectEvidence, countFields } from './evidence.js';
+import { lensMarkdown } from './consumer.js';
+import { createConsumerUI } from './consumer-ui.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -16,6 +18,7 @@ const PAGE_SIZE = 100;
 let dirty = false;
 let importing = 0;
 let demoKey = 'checkout';
+let consumer = null;
 const importVersion = { before: 0, after: 0 };
 function cancelImports() { importVersion.before++; importVersion.after++; }
 
@@ -29,6 +32,9 @@ function markDirty() {
   status('Inputs changed · compare again to refresh results.');
   $('#results').classList.add('stale-results');
   $('#results').setAttribute('aria-label', 'Previous results. Compare again to refresh.');
+  const protectButton = $('#detail-panel .protect-selected-field');
+  if (protectButton) protectButton.disabled = true;
+  consumer?.render();
 }
 
 function compare(force = false) {
@@ -37,11 +43,11 @@ function compare(force = false) {
   try {
     const format = $('#input-format').value;
     let before, after;
-    try { before = parseInput($('#before-input').value, format); } catch (e) { throw new Error(`Before: ${e.message}`); }
+    try { before = !$('#before-input').value.trim() && consumer?.hasRules() ? [] : parseInput($('#before-input').value, format); } catch (e) { throw new Error(`Before: ${e.message}`); }
     try { after = parseInput($('#after-input').value, format); } catch (e) { throw new Error(`After: ${e.message}`); }
     const beforeShape = inferShape(before);
     const afterShape = inferShape(after);
-    const changes = compareShapes(beforeShape, afterShape);
+    const changes = before.length ? compareShapes(beforeShape, afterShape) : [];
     const rank = { risk: 0, review: 1, info: 2 };
     changes.sort((a, b) => rank[a.severity] - rank[b.severity] || a.path.localeCompare(b.path));
     result = { before, after, beforeShape, afterShape, changes, beforeName: names.before, afterName: names.after };
@@ -54,7 +60,7 @@ function compare(force = false) {
     $('#results').classList.remove('stale-results');
     $('#results').removeAttribute('aria-label');
     setExportEnabled(true);
-    status(`${before.length} baseline + ${after.length} candidate ${before.length + after.length === 2 ? 'sample' : 'samples'} · compared locally`);
+    status(before.length ? `${before.length} baseline + ${after.length} candidate samples · compared locally` : `${after.length} candidate samples · Consumer Lens checked without baseline payloads`);
     render();
   } catch (e) {
     error(e.message);
@@ -62,6 +68,7 @@ function compare(force = false) {
     setExportEnabled(false);
     status('Check your input and compare again.');
     $('#results').classList.add('stale-results');
+    consumer?.render();
   }
 }
 
@@ -80,7 +87,7 @@ function percentage(presence) { return presence?.total ? `${Math.round(presence.
 function typePills(types) { return types?.length ? types.map(type => `<span class="type-pill ${escape(type)}">${escape(type)}</span>`).join(' ') : '<span class="muted">not observed</span>'; }
 function filteredChanges() {
   const query = $('#change-search').value.trim().toLowerCase();
-  return result.changes.filter(change => (severity === 'all' || change.severity === severity) && `${change.path} ${change.pointer} ${change.message} ${change.kind}`.toLowerCase().includes(query));
+  return consumer.focus(result.changes).filter(change => (severity === 'all' || change.severity === severity) && `${change.path} ${change.pointer} ${change.message} ${change.kind}`.toLowerCase().includes(query));
 }
 function renderList() {
   const filtered = filteredChanges();
@@ -115,7 +122,8 @@ function renderDetail() {
     $('#detail-panel').innerHTML = '<div class="detail-empty"><div class="detail-overline">EVIDENCE INSPECTOR</div><span class="empty-symbol">◎</span><h3>Every change has a story.</h3><p>Select a change to inspect the exact values observed in your samples.</p><span class="badge">Values stay in this tab</span></div>';
     return;
   }
-  $('#detail-panel').innerHTML = `<div class="detail-heading"><span class="detail-overline">EVIDENCE INSPECTOR</span><span class="severity-tag ${escape(change.severity)}">${labels[change.severity]}</span></div><h3 class="detail-path">${escape(change.path)}</h3><p class="detail-message">${escape(change.message)}</p><div class="detail-section"><div class="detail-section-title">FIELD PRESENCE <span>within observed parent objects</span></div><div class="presence-comparison">${presenceCard(change.beforePresence, 'Before')}${presenceCard(change.afterPresence, 'After')}</div></div><div class="detail-section"><div class="detail-section-title">SAMPLE EVIDENCE <span>first 6 per side · local only</span></div><div class="evidence-grid">${evidenceHTML(result.before, change.tokens, 'Before')}${evidenceHTML(result.after, change.tokens, 'After')}</div></div><div class="evidence-note"><svg class="icon"><use href="#icon-help"/></svg><p>These are observed samples, not a verified API contract. Empty arrays provide no item evidence. Array items are pooled; they are not paired by identity.</p></div><div class="pointer-line"><span>Path</span><code>${escape(change.pointer || '(root)')}</code></div>`;
+  $('#detail-panel').innerHTML = `<div class="detail-heading"><span class="detail-overline">EVIDENCE INSPECTOR</span><span class="severity-tag ${escape(change.severity)}">${labels[change.severity]}</span></div><h3 class="detail-path">${escape(change.path)}</h3><p class="detail-message">${escape(change.message)}</p><button type="button" class="button button-outline protect-selected-field">Protect this field in Consumer Lens</button><div class="detail-section"><div class="detail-section-title">FIELD PRESENCE <span>within observed parent objects</span></div><div class="presence-comparison">${presenceCard(change.beforePresence, 'Before')}${presenceCard(change.afterPresence, 'After')}</div></div><div class="detail-section"><div class="detail-section-title">SAMPLE EVIDENCE <span>first 6 per side · local only</span></div><div class="evidence-grid">${evidenceHTML(result.before, change.tokens, 'Before')}${evidenceHTML(result.after, change.tokens, 'After')}</div></div><div class="evidence-note"><svg class="icon"><use href="#icon-help"/></svg><p>These are observed samples, not a verified API contract. Empty arrays provide no item evidence. Array items are pooled; they are not paired by identity.</p></div><div class="pointer-line"><span>Path</span><code>${escape(change.pointer || '(root)')}</code></div>`;
+  $('#detail-panel .protect-selected-field').addEventListener('click', () => { try { consumer.protect(change.tokens); } catch (e) { $('#lens-status').textContent = e.message; } });
 }
 function presenceCard(presence, label) {
   return `<div class="presence-card"><span>${label}</span><strong>${percentage(presence)}</strong><div class="presence-track"><i style="width:${presence?.total ? Math.max(0, Math.min(100, presence.seen / presence.total * 100)) : 0}%"></i></div><small>${presence?.seen || 0} / ${presence?.total || 0} observed</small></div>`;
@@ -124,9 +132,22 @@ function coverage() {
   const beforeFields = countFields(result.beforeShape), afterFields = countFields(result.afterShape);
   $('#coverage-panel').innerHTML = `<div class="coverage-heading"><svg class="icon"><use href="#icon-shield"/></svg><div><h3>Know your sample coverage.</h3><p>${Math.min(result.before.length, result.after.length) < 5 ? 'Small sample set. Add more representative payloads to catch less common shapes.' : 'Presence reflects these samples only. Include edge cases, optional fields and failure responses.'}</p></div><span class="badge">OBSERVED, NOT GUARANTEED</span></div><div class="coverage-grid"><div class="coverage-stat"><span>Baseline samples</span><strong>${result.before.length}</strong></div><div class="coverage-stat"><span>Candidate samples</span><strong>${result.after.length}</strong></div><div class="coverage-stat"><span>Baseline field paths</span><strong>${beforeFields}</strong></div><div class="coverage-stat"><span>Candidate field paths</span><strong>${afterFields}</strong></div></div><p class="coverage-footnote">Property presence is counted within parent objects. Nested array items are pooled. Value-only changes, enum changes and format changes are outside this analysis.</p>`;
 }
-function render() { summary(); renderList(); renderDetail(); coverage(); }
+function render() {
+  $('#summary-cards').hidden = !result.before.length;
+  $('.result-grid').hidden = !result.before.length;
+  $('#coverage-panel').hidden = false;
+  $('.export-bar').hidden = false;
+  $('#results-title').textContent = result.before.length ? 'The shape of change' : 'Consumer checks · no baseline needed';
+  summary(); renderList(); renderDetail(); coverage(); consumer.render();
+  setExportEnabled(!dirty && (result.before.length > 0 || consumer.hasRules()));
+}
 
-function report() { return { tool: 'Payload Radar', version: '0.1.0', basis: 'Observed samples; not a verified API contract.', beforeName: result.beforeName, afterName: result.afterName, beforeSamples: result.before.length, afterSamples: result.after.length, changes: result.changes }; }
+function report() { return { tool: 'Payload Radar', version: '0.2.0', basis: result.before.length ? 'Observed shape changes and any explicitly declared consumer checks; not proof of consumer compatibility.' : 'Explicit consumer checks only. No baseline shape comparison was performed.', beforeName: result.beforeName, afterName: result.afterName, beforeSamples: result.before.length, afterSamples: result.after.length, changes: result.changes, ...(consumer.check() ? { consumer: consumer.check() } : {}) }; }
+function markdownReport() {
+  const context = report();
+  const structural = result.before.length ? toMarkdown(context) : '# Payload Radar report\n\nNo baseline payloads loaded. Only the explicit Consumer Lens was checked.\n';
+  return structural + (context.consumer ? `\n${lensMarkdown(context.consumer)}` : '');
+}
 function download(content, name, type) {
   const url = URL.createObjectURL(new Blob([content], { type }));
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click();
@@ -137,6 +158,7 @@ function download(content, name, type) {
 function loadDemo(key = 'checkout') {
   cancelImports();
   demoKey = key;
+  consumer?.preset(key === 'checkout' ? 'checkout' : null, false);
   const demo = demos[key];
   $('#input-format').value = 'jsonl';
   for (const side of ['before', 'after']) { $(`#${side}-input`).value = demoText(demo[side]); names[side] = demo[`${side}Name`]; $(`#${side}-name`).textContent = names[side]; }
@@ -206,12 +228,22 @@ $('#swap-button').addEventListener('click', () => {
 $('#clear-button').addEventListener('click', () => {
   cancelImports();
   for (const side of ['before', 'after']) { $(`#${side}-input`).value = ''; names[side] = `${side}.${$('#input-format').value}`; $(`#${side}-name`).textContent = names[side]; }
-  result = null; selected = null; dirty = false; error(); $('#results').hidden = true; setExportEnabled(false); status('Fresh workspace · paste or import your samples.'); $('#before-input').focus();
+  result = null; selected = null; dirty = false; error(); $('#results').hidden = false; $('#summary-cards').hidden = true; $('.result-grid').hidden = true; $('#coverage-panel').hidden = true; $('.export-bar').hidden = true; $('#results-title').textContent = 'Consumer Lens · ready for new samples'; setExportEnabled(false); status('Fresh payloads · your lens is retained. Import a lens or load candidate samples to check it.'); $('#before-input').focus();
+  consumer.render();
 });
 $('#severity-filters').addEventListener('click', event => { const button = event.target.closest('[data-severity]'); if (!button || !result) return; severity = button.dataset.severity; pageIndex = 0; renderList(); renderDetail(); });
 $('#change-search').addEventListener('input', () => { if (result) { pageIndex = 0; renderList(); renderDetail(); } });
-$('#export-report').addEventListener('click', () => { if (result && !dirty) download(toMarkdown(report()), 'payload-radar-report.md', 'text/markdown;charset=utf-8'); });
+$('#export-report').addEventListener('click', () => { if (result && !dirty) download(markdownReport(), 'payload-radar-report.md', 'text/markdown;charset=utf-8'); });
 $('#export-json').addEventListener('click', () => { if (result && !dirty) download(JSON.stringify(report(), null, 2), 'payload-radar-report.json', 'application/json'); });
 $('#export-schema').addEventListener('click', () => { if (result && !dirty) download(JSON.stringify(toJSONSchema(result.afterShape), null, 2), 'candidate.schema.json', 'application/schema+json'); });
 document.addEventListener('keydown', event => { if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') { event.preventDefault(); compare(); } });
+consumer = createConsumerUI({
+  getResult: () => result,
+  isDirty: () => dirty,
+  onUpdate: () => { pageIndex = 0; if (result && !dirty) render(); else consumer.render(); },
+  onDemo: key => { loadDemo('checkout'); consumer.preset(key); },
+  download,
+});
 loadDemo(demoKey);
+const requestedLens = new URL(location.href).searchParams.get('lens');
+if (requestedLens === 'email') consumer.preset('email');

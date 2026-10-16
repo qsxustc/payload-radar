@@ -22,3 +22,14 @@ jobs:
           node-version: ${{ matrix.node }}
       - run: npm test
       - run: npm run build
+
+  consumer-action:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify the published composite action
+        uses: ./
+        with:
+          lens: examples/checkout.lens.json
+          candidate: examples/checkout-before.jsonl
+          format: jsonl

@@ -1,0 +1,9 @@
+{
+  "kind": "payload-radar-consumer",
+  "schemaVersion": 1,
+  "name": "Checkout UI",
+  "rules": [
+    { "tokens": ["total"], "types": ["number"], "required": true },
+    { "tokens": ["items", null, "quantity"], "types": ["number"], "required": true }
+  ]
+}

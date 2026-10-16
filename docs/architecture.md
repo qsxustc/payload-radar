@@ -1,6 +1,6 @@
 # Architecture
 
-Payload Radar has a static browser app and a Node.js command-line entry point. Both use the same ES module inference engine. There are no runtime or build dependencies.
+Payload Radar has a static browser app and a Node.js command-line entry point. Both use the same ES module inference and consumer-check engines. There are no runtime or build dependencies.
 
 ## Data flow
 
@@ -9,6 +9,40 @@ Payload Radar has a static browser app and a Node.js command-line entry point. B
 3. `inferShape` merges the observed value types, object properties, array items and observation counts into a shape tree. The tree contains no raw sample values.
 4. `compareShapes` walks baseline and candidate trees and returns findings with typed paths and before/after observation counts.
 5. The browser sorts findings by severity and presents local sample evidence. Markdown, JSON and JSON Schema exports contain structure, names and counts, without raw sample values.
+
+Consumer Lens adds a second flow. The user explicitly selects paths and edits allowed types and required presence in the browser, or imports a versioned lens JSON file. `checkLens` validates the candidate samples and evaluates those rules directly. The lens does not retain an inferred baseline shape. An imported lens can check a browser candidate with an empty baseline; comparison findings are only computed when both inputs are present. Clearing inputs keeps the active lens. Browser Markdown/JSON review exports include the current consumer check. The CLI `check` command shares that implementation and defaults to failing on observed violations.
+
+## Consumer Lens
+
+A lens has a strict wire representation:
+
+```json
+{
+  "kind": "payload-radar-consumer",
+  "schemaVersion": 1,
+  "name": "Checkout UI",
+  "rules": [
+    { "tokens": ["total"], "types": ["number"], "required": true },
+    { "tokens": ["items", null, "quantity"], "types": ["number"], "required": true }
+  ]
+}
+```
+
+The six allowed JSON types are `array`, `boolean`, `null`, `number`, `object`, and `string`. A rule checks each reachable value at its typed path; `null` in `tokens` expands across array items. An empty token list checks the document root. Object property names remain literal, so the string `"[]"` is distinct from the array-item token `null`.
+
+`normalizeLens` rejects unknown or missing fields, unsupported versions, duplicate paths, invalid types, custom prototypes, accessors, symbols and malformed arrays. It copies validated data and sorts/deduplicates allowed types. `parseLens` validates imported JSON; `serializeLens` writes the stable representation. Lens files contain only the name and rules, without sample values or the full inferred baseline shape.
+
+For each rule, `checkLens` reports `checked`, `present`, `missing`, `mismatched`, `violations`, and `emptyArrays`. A required missing field, missing ancestor, or wrong container at an ancestor increments a missing violation. Optional missing fields do not violate a rule. A present value whose type is absent from `types` is a mismatch, including `null` unless explicitly allowed. A rule selecting an object or array checks that container's type and presence, without implicitly checking all children.
+
+Every matched array item is checked; items are not paired with baseline items or selected by an ID. An empty array increments `emptyArrays` and provides no item checks. It does not fabricate a missing child. A rule fails when it has violations, passes when it has at least one observed value and no violations, and otherwise requires review. Thus an entirely unobserved optional field requires review, and a mix of empty arrays and valid observed items can pass. The report status is `fail` if any rule fails, otherwise `review` if any rule requires review, otherwise `pass`.
+
+Diagnostic examples include sample numbers, concrete JSON Pointers, `missing`/`type` reasons and actual/expected type names, without raw values. Missing pointers stop at the actual missing key or blocking ancestor. Examples are capped at five per rule and a combined 2 MiB diagnostic-pointer budget; counts remain complete. `lensMarkdown` uses the same value-free report, escaping derived text for Markdown tables.
+
+The browser's focus option uses `relatedChanges`: findings at a selected field or one of its ancestors remain visible. Selecting a container does not pull in all descendant changes. Focus is a view over the original diff, whereas the consumer report checks only candidate samples against explicit rules.
+
+Lens input and serialized output are bounded to 256 KiB, one to 100 rules, and a trimmed name of one to 80 UTF-16 code units. Paths use the core's 64-step depth, 1,024-unit property-name and 4,096-unit cumulative-path limits. Imported or edited lenses must be explicitly exported to survive a refresh; the app does not persist them in browser storage.
+
+The CLI `check` gate defaults to `risk`: observed violations produce exit code 1. `review` and `any` also gate rules with no observed values; `none` disables the gate. Reports are produced before gating. Argument/input/I/O errors return 2, including attempts to use `--schema` in check mode. The original two-file diff mode retains its default `none` gate; `-- check after.json` treats a file literally named `check` as the baseline.
 
 ## Field presence
 
@@ -36,7 +70,7 @@ The generated JSON Schema uses types and properties observed in candidate sample
 
 ## Privacy and rendering
 
-The app does not call an API, persist payloads in browser storage, put payloads in URLs, or load third-party scripts and fonts. A hosting provider still receives normal page and asset requests. Selected file names, field names and generated review text can themselves be sensitive; review exports before distributing them.
+The app does not call an API, persist payloads or lenses in browser storage, put payloads in URLs, or load third-party scripts and fonts. A query such as `?lens=checkout` selects a synthetic demonstration, without encoding user payloads or lens contents. A hosting provider still receives normal page and asset requests. Selected file names, lens names, field names and generated review text can themselves be sensitive; review exports before distributing them.
 
 All payload-derived text is escaped before HTML rendering. Raw values are rendered as text within the local evidence inspector. Static build inputs are explicitly selected; Git metadata, command-line code and local development files are not copied into the deployed application.
 
@@ -45,9 +79,11 @@ All payload-derived text is escaped before HTML rendering. Raw values are render
 | File | Responsibility |
 | --- | --- |
 | `src/core.js` | Bounded parsing, shape inference, comparison and structural exports |
+| `src/consumer.js` | Lens validation/serialization, explicit candidate checks, related drift and value-free Markdown |
 | `src/evidence.js` | Typed-path observation lookup and field counts |
 | `src/demo.js` | Synthetic examples shared with fixture generation |
 | `src/app.js` | Browser state, file import, filters, evidence and downloads |
 | `bin/payload-radar.js` | Local file I/O, CLI options and requested CI gates |
+| `action.yml` | Composite GitHub Action with Node.js 22 setup, environment-bound inputs and the shared check CLI |
 | `scripts/build.mjs` | Static deployment artifact |
 | `scripts/serve.mjs` | Loopback-only development and preview server |

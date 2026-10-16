@@ -1,0 +1,9 @@
+{
+  "kind": "payload-radar-consumer",
+  "schemaVersion": 1,
+  "name": "Order email",
+  "rules": [
+    { "tokens": ["customer", "name"], "types": ["string"], "required": true },
+    { "tokens": ["customer", "email"], "types": ["string"], "required": true }
+  ]
+}

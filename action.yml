@@ -1,0 +1,57 @@
+name: Payload Radar Consumer Lens
+description: Check candidate JSON samples against the fields your code consumes, without a baseline payload.
+author: qsxustc
+branding:
+  icon: radio
+  color: blue
+inputs:
+  lens:
+    description: Path to a Consumer Lens JSON file in the caller's workspace.
+    required: true
+  candidate:
+    description: Path to candidate JSON or JSON Lines samples in the caller's workspace.
+    required: true
+  format:
+    description: Candidate input format, json or jsonl.
+    required: false
+    default: 'json'
+  fail-on:
+    description: CI gate, risk, review, any or none. Review and any include unobserved rules.
+    required: false
+    default: 'risk'
+  report:
+    description: Report format, markdown or json.
+    required: false
+    default: 'markdown'
+  output:
+    description: Optional path for a new report file. Existing files and inputs are never overwritten.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+    - name: Check consumer lens
+      shell: bash
+      env:
+        PAYLOAD_RADAR_LENS: ${{ inputs.lens }}
+        PAYLOAD_RADAR_CANDIDATE: ${{ inputs.candidate }}
+        PAYLOAD_RADAR_FORMAT: ${{ inputs.format }}
+        PAYLOAD_RADAR_FAIL_ON: ${{ inputs.fail-on }}
+        PAYLOAD_RADAR_REPORT: ${{ inputs.report }}
+        PAYLOAD_RADAR_OUTPUT: ${{ inputs.output }}
+      run: |
+        set -euo pipefail
+        if [[ -z "$PAYLOAD_RADAR_LENS" || -z "$PAYLOAD_RADAR_CANDIDATE" ]]; then
+          printf '%s\n' 'payload-radar: lens and candidate inputs are required.' >&2
+          exit 2
+        fi
+        args=(check --format "$PAYLOAD_RADAR_FORMAT" --report "$PAYLOAD_RADAR_REPORT" --fail-on "$PAYLOAD_RADAR_FAIL_ON")
+        if [[ -n "$PAYLOAD_RADAR_OUTPUT" ]]; then
+          args+=(--output "$PAYLOAD_RADAR_OUTPUT")
+        fi
+        args+=(-- "$PAYLOAD_RADAR_LENS" "$PAYLOAD_RADAR_CANDIDATE")
+        node "$GITHUB_ACTION_PATH/bin/payload-radar.js" "${args[@]}"
