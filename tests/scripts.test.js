@@ -5,20 +5,22 @@ import { spawn, spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import http from 'node:http';
+import { contentBuildID, versionModuleReferences } from '../scripts/assets.mjs';
 
 async function site(t) {
   const directory = await mkdtemp(path.join(tmpdir(), 'payload-radar-scripts-'));
   t.after(() => rm(directory, { recursive: true, force: true }));
   for (const folder of ['scripts', 'src', 'assets', 'examples', '.git']) await mkdir(path.join(directory, folder));
-  for (const name of ['build.mjs', 'serve.mjs']) await copyFile(new URL(`../scripts/${name}`, import.meta.url), path.join(directory, 'scripts', name));
-  await writeFile(path.join(directory, 'index.html'), '<h1>Payload Radar fixture</h1>');
+  for (const name of ['build.mjs', 'assets.mjs', 'serve.mjs']) await copyFile(new URL(`../scripts/${name}`, import.meta.url), path.join(directory, 'scripts', name));
+  await writeFile(path.join(directory, 'index.html'), '<link rel="stylesheet" href="./src/styles.css"><h1>Payload Radar fixture</h1><script type="module" src="./src/app.js"></script>');
   await writeFile(path.join(directory, 'src', 'app.js'), 'export const value = 1;');
+  await writeFile(path.join(directory, 'src', 'styles.css'), 'body { color: black; }');
   await writeFile(path.join(directory, 'assets', 'logo.svg'), '<svg/>');
   await writeFile(path.join(directory, 'assets', 'demo.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
   await writeFile(path.join(directory, 'examples', 'sample.json'), '{}');
   await writeFile(path.join(directory, '.git', 'config'), 'private git config');
   await writeFile(path.join(directory, '.env'), 'PRIVATE_TOKEN=secret');
-  await writeFile(path.join(directory, 'package.json'), '{"type":"module"}');
+  await writeFile(path.join(directory, 'package.json'), '{"type":"module","version":"0.3.0"}');
   return directory;
 }
 
@@ -35,6 +37,68 @@ test('build copies selected static files, excludes local metadata and replaces s
   result = build(directory);
   assert.equal(result.status, 0, result.stderr);
   await assert.rejects(access(path.join(directory, 'dist', 'obsolete.txt')));
+});
+
+test('build versions the whole module graph consistently and leaves source inputs unchanged', async t => {
+  const directory = await site(t);
+  const app = "import { value } from './core.js';\nexport { value };\n";
+  const module = "export { value } from './values.js';\n";
+  await writeFile(path.join(directory, 'src', 'app.js'), app);
+  await writeFile(path.join(directory, 'src', 'core.js'), module);
+  await writeFile(path.join(directory, 'src', 'values.js'), 'export const value = 1;');
+  const readDist = name => readFile(path.join(directory, 'dist', name), 'utf8');
+  const buildID = async () => {
+    const index = await readDist('index.html');
+    const id = index.match(/src\/app\.js\?v=([a-f0-9]{16})/)[1];
+    assert.ok(index.includes(`src/styles.css?v=${id}`));
+    assert.ok((await readDist('src/app.js')).includes(`./core.js?v=${id}`));
+    assert.ok((await readDist('src/core.js')).includes(`./values.js?v=${id}`));
+    return id;
+  };
+  let result = build(directory);
+  assert.equal(result.status, 0, result.stderr);
+  const first = await buildID();
+  result = build(directory);
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(await buildID(), first, 'unchanged inputs have a stable build ID');
+  await writeFile(path.join(directory, 'src', 'values.js'), 'export const value = 2;');
+  result = build(directory);
+  assert.equal(result.status, 0, result.stderr);
+  const second = await buildID();
+  assert.notEqual(second, first, 'a dependency change updates the entry and every dependency URL');
+  await writeFile(path.join(directory, 'package.json'), '{"type":"module","version":"0.3.1"}');
+  result = build(directory);
+  assert.equal(result.status, 0, result.stderr);
+  assert.notEqual(await buildID(), second, 'release versions also contribute to the build ID');
+  assert.equal(await readFile(path.join(directory, 'src', 'app.js'), 'utf8'), app);
+  assert.equal(await readFile(path.join(directory, 'src', 'core.js'), 'utf8'), module);
+  assert.equal((await readFile(path.join(directory, 'index.html'), 'utf8')).includes('?v='), false);
+});
+
+test('asset versioning handles supported static ESM declarations without changing quoted examples', () => {
+  const source = [
+    "import { value } from './core.js';",
+    "import './side-effect.js';",
+    'import * as helpers from "../helpers.js";',
+    "export { value } from './core.js';",
+    "export * from './other.js';",
+    "export * as other from './other.js';",
+    'const example = "import value from \'./example.js\';";',
+    "// import value from './comment.js';",
+    "/* import value from './block-comment.js'; */",
+    "const template = `import value from './template.js'; ${`nested ${'text'}`}`;",
+    "const pattern = /prefix import value from '.\\/pattern.js'/;",
+    "const dynamic = import('./dynamic.js');",
+    "const local = new URL('./location.js', import.meta.url);",
+    "import { value as external } from 'package.js';",
+  ].join('\n');
+  const result = versionModuleReferences(source, 'abc123');
+  assert.equal(result.match(/\?v=abc123/g).length, 6);
+  for (const name of ['example', 'comment', 'block-comment', 'template', 'pattern', 'dynamic', 'location', 'package']) {
+    assert.equal(result.includes(`${name}.js?v=`), false);
+  }
+  assert.equal(contentBuildID('0.3.0', [['src/a.js', 'a'], ['src/b.js', 'b']]), contentBuildID('0.3.0', [['src/b.js', 'b'], ['src/a.js', 'a']]));
+  assert.notEqual(contentBuildID('0.3.0', [['a', 'bc']]), contentBuildID('0.3.0', [['ab', 'c']]));
 });
 
 test('build rejects symlink inputs and preserves the last successful build', async t => {

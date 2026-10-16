@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.3.0 — 2026-10-17
+
+Make the first review immediate, bringing your own data predictable, and sharing the result a single local action.
+
+- Open the synthetic checkout review with already-calculated results and collapsed payload editors; a clear **See example results** route shows the consumer-focused findings first.
+- Add **Use my own JSON** to leave the demo and open a fresh comparison. Untouched demo lens rules are removed when working with custom data; explicitly edited or imported rules are retained.
+- Detect JSON or JSON Lines independently on each browser input. Pretty-printed documents and mixed-format pairs work without selecting a shared mode; each side still has an explicit override and shows its detected format.
+- Preserve top-level JSON arrays as one sample, detailed malformed-JSONL line numbers, and every existing parser safety bound. Valid JSON that exceeds a limit never falls back to another format.
+- Add **Copy review summary** for compact Markdown containing structural facts and consumer-check results without raw sample values. Clipboard failures provide selected text for manual copying; nothing is posted or uploaded automatically.
+- Add **Copy demo link** for built-in synthetic examples without encoding user payloads or lens contents in the URL.
+- Add a deterministic content build ID to deployed CSS/JavaScript entrypoints and relative static module imports, avoiding stale browser modules after a refreshed deployment. Source inputs remain unchanged and failed builds preserve the previous output.
+- Update the first-run screenshot, bilingual quick start, sharing guidance, architecture and launch notes. The reusable Action example now targets `v0.3.0`.
+
+Browser Auto detection is a browser helper; CLI `--format json|jsonl`, engine parsing, consumer rules and existing CI gates remain compatible. Copied names and paths can still be sensitive even when raw values are omitted.
+
 ## 0.2.0 — 2026-10-17
 
 Consumer Lens adds a consumer's view of API drift: select only the fields your code depends on, state the types and presence it requires, and check candidate samples against those explicit rules.

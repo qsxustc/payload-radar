@@ -3,19 +3,23 @@
 <p align="center"><strong>API 变了，你的应用依赖的那部分还能用吗？</strong></p>
 <p align="center">Consumer Lens 调用方规则 + JSON 结构检查器 · 浏览器 + CLI · 零依赖 · MIT</p>
 <p align="center"><a href="README.md">English</a> · 简体中文</p>
-<p align="center"><a href="https://qsxustc.github.io/payload-radar/?lens=checkout"><strong>立即体验 Consumer Lens</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub 仓库</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
+<p align="center"><a href="https://qsxustc.github.io/payload-radar/?lens=checkout#consumer-panel"><strong>立即体验交互审查</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub 仓库</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
 
 一份 API 返回值可能有九处结构变化，你的结账页面却只依赖其中两个字段。**Consumer Lens** 让你亲手选出这些字段，声明代码需要的类型和必填要求，再检查候选样本是否满足这组小而明确的规则。
 
 例如，将 `total` 与 `items[].quantity` 都设为必填数字。无关物流字段的变化可以移出关注范围，`total: "84.50"` 则会违反所选规则。导出不含原始样本值的 `.lens.json` 文件，提交到代码仓库，CI 就能复用同一组检查，无需保留基线载荷、服务端、API Key 或依赖安装。
 
-原有的 JSON / JSON Lines 前后结构比较与本地样本证据仍然可用。Lens 在此基础上加入明确的调用方视角：由你决定哪些字段值得守护。
+打开应用就能查看已经计算好的演示结果，再点 **Use my own JSON** 换成自己的响应。两侧分别自动识别 JSON 或 JSON Lines，可直接把跨行排版的响应与 JSONL 样本集比较。**Copy review summary** 会生成适合贴进 Pull Request 的简短 Markdown，包含结构变化与调用方检查，不含原始样本值。
 
-![Consumer Lens 将结账 API 的九处变化聚焦到两个依赖字段，并展示候选规则违反](assets/consumer-demo.jpg)
+![Payload Radar 直接展示演示审查结果，并提供自己的 JSON 入口和可复制的审查摘要](assets/first-run-demo.jpg)
 
 ## 一分钟体验
 
-打开 [Consumer Lens 在线演示](https://qsxustc.github.io/payload-radar/?lens=checkout) 可以直接体验。也可克隆此仓库后运行：
+打开[结账 API 交互审查](https://qsxustc.github.io/payload-radar/?lens=checkout#consumer-panel)。合成数据已经完成比较，示例编辑器默认折叠，Checkout UI 的 Lens 将九处结构变化聚焦到两个相关路径。点击 **See example results** 可直达结果；需要看原始输入时，展开 **View example payloads**。
+
+要检查真实响应，点击 **Use my own JSON**，粘贴或导入前后样本，再执行比较。未经编辑的示例规则会被移除，避免把结账示例的假设带进你的数据；你明确编辑过或导入的规则会保留。每侧编辑器都可独立选择 **Auto detect / JSON / JSON Lines**，比较后显示识别到的格式。
+
+也可克隆此仓库后运行：
 
 ```sh
 git clone https://github.com/qsxustc/payload-radar.git
@@ -23,7 +27,7 @@ cd payload-radar
 npm run dev
 ```
 
-打开 **http://127.0.0.1:5190**。需要 **Node.js 20 或更新版本**，无需安装任何依赖。应用启动后会直接加载合成的结账 API 示例。点击 **Examples**，还可以体验 Webhook 边界情况和“值改变但结构不变”的版本对比。
+打开 **http://127.0.0.1:5190**。需要 **Node.js 20 或更新版本**，无需安装任何依赖。点击 **Examples**，还可以体验 Webhook 边界情况和“值改变但结构不变”的版本对比。
 
 命令行可以直接运行：
 
@@ -35,12 +39,12 @@ node bin/payload-radar.js \
 
 ## 从结构噪声到调用方检查
 
-1. 在[工作台](https://qsxustc.github.io/payload-radar/?lens=checkout)加载基线与候选 JSON / JSONL 样本。
+1. 在[工作台](https://qsxustc.github.io/payload-radar/?lens=checkout#results)点击 **Use my own JSON**，再粘贴或导入基线与候选样本。浏览器会独立识别两侧格式。
 2. 在 **Consumer Lens** 中只添加调用方代码真正读取的字段。基线观察结果提供起点；请审查允许类型和必填要求。
 3. 查看候选样本违反了哪些规则，并将结构变化列表聚焦到相关路径。容器规则只检查该容器的类型；需要保证子字段时，请单独添加子字段规则。
 4. 导出 `.lens.json`。其中只有名称和明确规则，不包含原始样本值或完整基线结构。下次可以重新导入，也可提交到代码仓库供 CI 使用。
 
-已有 Lens 时，可以先导入，再**只加载候选载荷**，基线留空即可。**Clear inputs** 会保留当前 Lens，便于反复检查新的响应。两侧都有输入时可查看结构变化；只有候选输入时展示调用方检查结果。Markdown 和 JSON 审查报告都包含这项检查。
+已有 Lens 时，可以先导入，再**只加载候选载荷**，基线留空即可。**Clear inputs** 会保留你编辑过或导入的规则，便于反复检查新的响应；未经编辑的演示规则会在开始使用自己的数据时清除。两侧都有输入时可查看结构变化；只有候选输入时展示调用方检查结果。Markdown 和 JSON 审查报告都包含这项检查。
 
 从浏览器下载 Lens 后，只需一条命令检查新的载荷：
 
@@ -61,8 +65,17 @@ node bin/payload-radar.js check \
 
 Lens 通过只表示这批候选样本满足你选择的规则，不证明未来所有返回值、其他字段或完整 API 契约都兼容。
 
+## 把审查带进 Pull Request
+
+比较完成后，点击 **Copy review summary** 即可复制简短 Markdown，内容包括样本数量、各严重程度的统计、变化路径和明确声明的调用方检查结果，不包含原始载荷值。你可以自行粘贴到 PR 或 Issue；应用不会自动发布或上传这些文字。
+
+浏览器不允许访问剪贴板时，会打开对话框并选中文本，供你手动复制。**Copy demo link** 只分享内置合成示例，链接不包含你的载荷或 Lens 内容。字段名和结构路径也可能敏感，分享前请审查复制或下载的文字。
+
 ## 已实现的功能
 
+- **快速理解第一份结果**：默认展示已计算的合成示例，折叠示例输入，并提供清晰的自有 JSON 入口。
+- **两侧独立识别格式**：混合比较 JSON 与 JSON Lines，查看识别结果，也可分别手动指定格式。
+- **可复制的审查摘要**：生成不含原始样本值的简短 Markdown；剪贴板不可用时支持手动复制。
 - **Consumer Lens**：手选依赖路径，编辑允许类型和必填要求，查看候选规则检查结果，并导入、导出不含原始样本值的规则文件。
 - **结构变化检查**：未再观察到的字段、新字段、新类型、首次出现的 `null`、字段出现率变化，以及空数组带来的证据缺口。
 - **可检查的样本证据**：点击变化项，查看原始观察值、字段缺失位置、样本编号和路径。每侧最多展示六条观察记录。
@@ -73,14 +86,16 @@ Lens 通过只表示这批候选样本满足你选择的规则，不证明未来
 
 ## 输入格式
 
-两侧共用一种输入格式，文件使用 UTF-8 编码。
+浏览器默认在**两侧独立自动识别格式**：先把整段输入按一个完整 JSON 文档读取，仅在 JSON 语法错误时尝试 JSON Lines；超出安全限制和非有限数值等验证错误不会触发格式切换。每侧都能独立手动指定格式。文件使用 UTF-8 编码。
 
 | 格式 | 含义 | 示例 |
 | --- | --- | --- |
 | JSON | 一个完整文档就是一个样本，顶层数组也不例外 | `[{"id":1},{"id":2}]` 是一个数组样本 |
 | JSONL / JSON Lines | 每个非空行是一个完整 JSON 样本 | 两行分别写 `{"id":1}` 和 `{"id":2}`，就是两个对象样本 |
 
-JSONL 会忽略空白行。跨行排版的 JSON 对象应使用 JSON 模式。每侧限制为 **2 MiB**、**1,000 个顶层样本**、**64 层嵌套**和 **50,000 个被访问的值**。数据较大时，请挑选有代表性的子集。
+JSONL 会忽略空白行。跨行排版的 JSON 会识别为 JSON；只有一条合法 JSON 的 JSONL 会识别为单个 JSON 文档，两者样本含义相同。自动模式下，顶层数组始终是一个文档。**CLI 的 `--format` 仍只接受 `json|jsonl`，并对前后两个输入同时生效**，默认仍为 `json`。浏览器的自动识别不会改变 CLI 或核心引擎的解析语义。
+
+每侧限制为 **2 MiB**、**1,000 个顶层样本**、**64 层嵌套**和 **50,000 个被访问的值**。数据较大时，请挑选有代表性的子集。
 
 每个字段名最多 **1,024 个 UTF-16 码元**。结构路径的累计长度最多 **4,096 个 UTF-16 码元**：每个属性按字段名长度加一个分隔符计算，每次数组元素步骤计两个码元。所有发现中，将每项的 `{ id, path, pointer, tokens }` 对象分别 JSON 编码后，其 UTF-8 大小合计不得超过 **2 MiB**。此限制针对变化位置元数据，不是整个导出报告的大小上限。遇到限制时，请缩短字段名或分组对比更小的样本集合。
 
@@ -134,7 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: qsxustc/payload-radar@v0.2.0
+      - uses: qsxustc/payload-radar@v0.3.0
         with:
           lens: contracts/checkout.lens.json
           candidate: fixtures/checkout-after.jsonl
@@ -208,7 +223,7 @@ npm run build       # 生成静态应用到 dist/
 npm run preview     # 在 http://127.0.0.1:5190 预览 dist/
 ```
 
-指定其他端口：`npm run dev -- --port 5191` 或 `npm run preview -- --port 5191`。开发服务器只监听回环地址，仅提供应用资源。构建只复制 `index.html`、`src/`、`assets/` 和 `examples/`，不部署本地元数据与 CLI 代码。
+指定其他端口：`npm run dev -- --port 5191` 或 `npm run preview -- --port 5191`。开发服务器只监听回环地址，仅提供应用资源。构建只复制 `index.html`、`src/`、`assets/` 和 `examples/`，不部署本地元数据与 CLI 代码。构建产物会给 CSS / JavaScript 入口及相对静态模块引用附加统一、稳定的内容构建标识，使刷新后的页面使用同一份模块集合；源文件保持不变。
 
 自带的 [Pages 工作流](.github/workflows/pages.yml) 会在 `main` 推送或手动触发时测试、构建并部署 `dist/`。在仓库设置中将 Pages 来源设为 **GitHub Actions**。资源路径均为相对路径，也可部署在子路径或其他静态托管平台。
 

@@ -4,13 +4,21 @@ Payload Radar has a static browser app and a Node.js command-line entry point. B
 
 ## Data flow
 
-1. The browser accepts pasted text or reads a user-selected UTF-8 file into memory. The CLI reads two local regular files.
-2. `parseInput` interprets a single JSON document or a set of JSON Lines samples. A top-level JSON array stays a single document. It is not silently converted into independent top-level samples.
+1. The browser accepts pasted text or reads a user-selected UTF-8 file into memory. The CLI reads local regular files for a diff or a lens/candidate check.
+2. Browser-only `parsePayload` detects each input independently through `parseInput`: it tries one complete JSON document first, then attempts JSON Lines only after a syntax error. Explicit `json` or `jsonl` choices bypass detection. Empty input retains its clear empty-input error; type, finite-number and safety-bound failures are never treated as format guesses. CLI `--format json|jsonl` and core `parseInput` retain their existing explicit semantics. A top-level JSON array stays a single document, rather than silently becoming independent top-level samples.
 3. `inferShape` merges the observed value types, object properties, array items and observation counts into a shape tree. The tree contains no raw sample values.
 4. `compareShapes` walks baseline and candidate trees and returns findings with typed paths and before/after observation counts.
-5. The browser sorts findings by severity and presents local sample evidence. Markdown, JSON and JSON Schema exports contain structure, names and counts, without raw sample values.
+5. The browser sorts findings by severity and presents local sample evidence. Markdown, JSON, JSON Schema and compact copied review summaries contain structure, names and counts, without raw sample values.
 
-Consumer Lens adds a second flow. The user explicitly selects paths and edits allowed types and required presence in the browser, or imports a versioned lens JSON file. `checkLens` validates the candidate samples and evaluates those rules directly. The lens does not retain an inferred baseline shape. An imported lens can check a browser candidate with an empty baseline; comparison findings are only computed when both inputs are present. Clearing inputs keeps the active lens. Browser Markdown/JSON review exports include the current consumer check. The CLI `check` command shares that implementation and defaults to failing on observed violations.
+Consumer Lens adds a second flow. The user explicitly selects paths and edits allowed types and required presence in the browser, or imports a versioned lens JSON file. `checkLens` validates the candidate samples and evaluates those rules directly. The lens does not retain an inferred baseline shape. An imported lens can check a browser candidate with an empty baseline; comparison findings are only computed when both inputs are present. Clearing inputs keeps explicitly edited or imported rules, while untouched example presets are dropped on the transition to custom data. Browser Markdown/JSON review exports and copied summaries include the current consumer check. The CLI `check` command shares that implementation and defaults to failing on observed violations.
+
+## First-run and sharing flow
+
+The initial checkout is visibly synthetic and already compared; its editors start collapsed so users can inspect the nine-to-two consumer focus before reading sample text. **See example results** navigates to that result. **Use my own JSON** clears example inputs, opens the editors, and removes untouched example assumptions. Editing or importing sample data also leaves the demo context. Consumer rules have explicit provenance: changing a rule or importing a lens promotes those choices to user-owned rules, which survive a fresh-input transition.
+
+Each side stores its own format preference and, after successful parsing, detected format. A baseline JSON document and a candidate JSONL stream can therefore be compared directly. Explicit format overrides remain authoritative. Browser format detection is implemented as a separate helper and does not extend the public CLI format options or reinterpret arrays as multiple samples.
+
+**Copy review summary** prepares bounded Markdown from structural findings and consumer-check reports. It contains no original scalar sample values. A clipboard write is performed only after the user requests it; when it is unavailable or rejected, a dialog presents selected text for manual copying. The application does not post a GitHub comment, create a remote paste or upload the generated summary. **Copy demo link** uses only the built-in example selection and section anchor. It never serializes payloads or lens contents into a URL.
 
 ## Consumer Lens
 
@@ -70,15 +78,22 @@ The generated JSON Schema uses types and properties observed in candidate sample
 
 ## Privacy and rendering
 
-The app does not call an API, persist payloads or lenses in browser storage, put payloads in URLs, or load third-party scripts and fonts. A query such as `?lens=checkout` selects a synthetic demonstration, without encoding user payloads or lens contents. A hosting provider still receives normal page and asset requests. Selected file names, lens names, field names and generated review text can themselves be sensitive; review exports before distributing them.
+The app does not call an API, persist payloads or lenses in browser storage, put payloads in URLs, or load third-party scripts and fonts. A query such as `?lens=checkout#consumer-panel` selects a synthetic demonstration, without encoding user payloads or lens contents. A hosting provider still receives normal page and asset requests. Selected file names, lens names, field names and generated review text can themselves be sensitive; review copied summaries and exports before distributing them.
 
 All payload-derived text is escaped before HTML rendering. Raw values are rendered as text within the local evidence inspector. Static build inputs are explicitly selected; Git metadata, command-line code and local development files are not copied into the deployed application.
+
+## Deployment consistency
+
+The build stages selected static files in a temporary directory and computes a SHA-256 content ID from their sorted paths and bytes plus the package version. Rebuilding identical inputs produces the same ID. The built `index.html` references `app.js` and `styles.css` with `?v=<buildID>`, and built browser modules use that same query for relative static JavaScript imports and re-exports. Thus a fresh HTML response after deployment requests one version of the complete module graph instead of reusing cached dependencies from the prior release.
+
+Only the staged artifact is rewritten. Source files are preserved, relative paths continue to work beneath a repository subpath, and an unsuccessful build leaves the previous successful `dist/` in place. The dependency-free rewriter handles this project's quoted static ESM references while leaving dynamic imports, nonrelative package names and quoted/commented examples intact.
 
 ## Main modules
 
 | File | Responsibility |
 | --- | --- |
 | `src/core.js` | Bounded parsing, shape inference, comparison and structural exports |
+| `src/input.js` | Browser-only independent JSON/JSONL detection through the bounded core parser |
 | `src/consumer.js` | Lens validation/serialization, explicit candidate checks, related drift and value-free Markdown |
 | `src/evidence.js` | Typed-path observation lookup and field counts |
 | `src/demo.js` | Synthetic examples shared with fixture generation |
@@ -86,4 +101,5 @@ All payload-derived text is escaped before HTML rendering. Raw values are render
 | `bin/payload-radar.js` | Local file I/O, CLI options and requested CI gates |
 | `action.yml` | Composite GitHub Action with Node.js 22 setup, environment-bound inputs and the shared check CLI |
 | `scripts/build.mjs` | Static deployment artifact |
+| `scripts/assets.mjs` | Stable content build IDs and versioned entry/module URLs in the staged artifact |
 | `scripts/serve.mjs` | Loopback-only development and preview server |

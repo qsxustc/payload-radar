@@ -1,8 +1,10 @@
-import { parseInput, inferShape, compareShapes, toJSONSchema, toMarkdown } from './core.js';
+import { inferShape, compareShapes, toJSONSchema, toMarkdown } from './core.js';
 import { demos, demoText } from './demo.js';
 import { collectEvidence, countFields } from './evidence.js';
-import { lensMarkdown } from './consumer.js';
+import { lensMarkdown, relatedChanges } from './consumer.js';
 import { createConsumerUI } from './consumer-ui.js';
+import { parsePayload } from './input.js';
+import { toReviewSummary } from './review.js';
 
 const $ = selector => document.querySelector(selector);
 const $$ = selector => [...document.querySelectorAll(selector)];
@@ -19,12 +21,19 @@ let dirty = false;
 let importing = 0;
 let demoKey = 'checkout';
 let consumer = null;
+let workspaceMode = 'demo';
+let demoLensKey = 'checkout';
 const importVersion = { before: 0, after: 0 };
 function cancelImports() { importVersion.before++; importVersion.after++; }
 
 function status(text) { $('#input-status').textContent = text; }
+let feedbackTimer;
+function feedback(text) {
+  const banner = $('#action-feedback'); banner.textContent = text; banner.hidden = false;
+  clearTimeout(feedbackTimer); feedbackTimer = setTimeout(() => { banner.hidden = true; }, 6500);
+}
 function error(message = '') { $('#error-message').textContent = message; $('#error-message').hidden = !message; }
-function setExportEnabled(enabled) { ['#export-report', '#export-json', '#export-schema'].forEach(id => { $(id).disabled = !enabled; }); }
+function setExportEnabled(enabled) { ['#export-report', '#export-json', '#export-schema', '#copy-review'].forEach(id => { $(id).disabled = !enabled; }); }
 function markDirty() {
   dirty = true;
   setExportEnabled(false);
@@ -35,22 +44,26 @@ function markDirty() {
   const protectButton = $('#detail-panel .protect-selected-field');
   if (protectButton) protectButton.disabled = true;
   consumer?.render();
+  updateFormatLabels();
+  updateIntro();
 }
 
 function compare(force = false) {
   if (importing && force !== true) return;
   error();
   try {
-    const format = $('#input-format').value;
-    let before, after;
-    try { before = !$('#before-input').value.trim() && consumer?.hasRules() ? [] : parseInput($('#before-input').value, format); } catch (e) { throw new Error(`Before: ${e.message}`); }
-    try { after = parseInput($('#after-input').value, format); } catch (e) { throw new Error(`After: ${e.message}`); }
+    let before, after, beforeFormat = null, afterFormat;
+    try {
+      if (!$('#before-input').value.trim() && consumer?.hasRules()) before = [];
+      else { const parsed = parsePayload($('#before-input').value, $('#before-format').value); before = parsed.samples; beforeFormat = parsed.format; }
+    } catch (e) { throw new Error(`Before: ${e.message}`); }
+    try { const parsed = parsePayload($('#after-input').value, $('#after-format').value); after = parsed.samples; afterFormat = parsed.format; } catch (e) { throw new Error(`After: ${e.message}`); }
     const beforeShape = inferShape(before);
     const afterShape = inferShape(after);
     const changes = before.length ? compareShapes(beforeShape, afterShape) : [];
     const rank = { risk: 0, review: 1, info: 2 };
     changes.sort((a, b) => rank[a.severity] - rank[b.severity] || a.path.localeCompare(b.path));
-    result = { before, after, beforeShape, afterShape, changes, beforeName: names.before, afterName: names.after };
+    result = { before, after, beforeShape, afterShape, changes, beforeFormat, afterFormat, beforeName: names.before, afterName: names.after };
     selected = changes[0]?.id || null;
     dirty = false;
     severity = 'all';
@@ -69,6 +82,8 @@ function compare(force = false) {
     status('Check your input and compare again.');
     $('#results').classList.add('stale-results');
     consumer?.render();
+    $('#payload-editors').open = true;
+    updateIntro();
   }
 }
 
@@ -140,9 +155,10 @@ function render() {
   $('#results-title').textContent = result.before.length ? 'The shape of change' : 'Consumer checks · no baseline needed';
   summary(); renderList(); renderDetail(); coverage(); consumer.render();
   setExportEnabled(!dirty && (result.before.length > 0 || consumer.hasRules()));
+  updateFormatLabels(); updateIntro();
 }
 
-function report() { return { tool: 'Payload Radar', version: '0.2.0', basis: result.before.length ? 'Observed shape changes and any explicitly declared consumer checks; not proof of consumer compatibility.' : 'Explicit consumer checks only. No baseline shape comparison was performed.', beforeName: result.beforeName, afterName: result.afterName, beforeSamples: result.before.length, afterSamples: result.after.length, changes: result.changes, ...(consumer.check() ? { consumer: consumer.check() } : {}) }; }
+function report() { return { tool: 'Payload Radar', version: '0.3.0', basis: result.before.length ? 'Observed shape changes and any explicitly declared consumer checks; not proof of consumer compatibility.' : 'Explicit consumer checks only. No baseline shape comparison was performed.', beforeName: result.beforeName, afterName: result.afterName, beforeSamples: result.before.length, afterSamples: result.after.length, changes: result.changes, ...(consumer.check() ? { consumer: consumer.check() } : {}) }; }
 function markdownReport() {
   const context = report();
   const structural = result.before.length ? toMarkdown(context) : '# Payload Radar report\n\nNo baseline payloads loaded. Only the explicit Consumer Lens was checked.\n';
@@ -153,25 +169,85 @@ function download(content, name, type) {
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = name; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
   status(`Downloaded ${name} · contains no raw sample values.`);
+  feedback(`Downloaded ${name} · no raw sample values.`);
 }
 
 function loadDemo(key = 'checkout') {
   cancelImports();
   demoKey = key;
+  workspaceMode = 'demo'; demoLensKey = 'checkout';
   consumer?.preset(key === 'checkout' ? 'checkout' : null, false);
   const demo = demos[key];
-  $('#input-format').value = 'jsonl';
+  for (const side of ['before', 'after']) $(`#${side}-format`).value = 'auto';
   for (const side of ['before', 'after']) { $(`#${side}-input`).value = demoText(demo[side]); names[side] = demo[`${side}Name`]; $(`#${side}-name`).textContent = names[side]; }
   updateFormatLabels();
   compare(true);
   status(`${demo.title} · synthetic example · ${demo.before.length} + ${demo.after.length} samples`);
+  $('#payload-editors').open = false;
 }
 function updateFormatLabels() {
-  $$('.editor-language').forEach(label => { label.textContent = $('#input-format').value === 'jsonl' ? 'JSONL' : 'JSON'; });
+  for (const side of ['before', 'after']) {
+    const format = !dirty && result ? result[`${side}Format`] : null;
+    const samples = !dirty && result ? result[side].length : 0;
+    $(`#${side}-detected`).textContent = format ? `${format === 'jsonl' ? 'JSON Lines' : 'JSON'} · ${samples} ${samples === 1 ? 'sample' : 'samples'}` : 'Not compared';
+  }
+}
+
+function updateIntro() {
+  const isDemo = workspaceMode === 'demo';
+  $('#workspace-mode').textContent = isDemo ? 'DEMO · SYNTHETIC DATA' : 'YOUR DATA · LOCAL ONLY';
+  if (isDemo) {
+    const lens = consumer?.value();
+    const count = result?.changes.length || 0;
+    const related = result && lens ? relatedChanges(result.changes, lens).length : null;
+    $('#journey-title').textContent = lens && related !== null ? `${count} API changes. ${related} relate to ${lens.name}.` : count ? `${count} observed changes. See the evidence.` : 'Different values. The same observed shape.';
+    $('#journey-description').textContent = `${demos[demoKey].title}. This is synthetic example data. Start your own comparison without carrying over demo rules.`;
+  } else {
+    $('#journey-title').textContent = result && !dirty ? `${result.before.length ? result.changes.length + (result.changes.length === 1 ? ' observed change' : ' observed changes') : 'Consumer checks'} in your payloads.` : 'Your responses. Your review.';
+    $('#journey-description').textContent = 'Paste JSON or JSON Lines on either side. Formats are detected independently. Demo rules never apply to your data; your own lenses stay available.';
+  }
+  $('#show-results').textContent = isDemo ? 'See example results ↓' : 'View results ↓';
+  $('#show-results').disabled = !result || dirty;
+  $('#start-own').textContent = isDemo ? 'Use my own JSON' : 'New comparison';
+  $('#copy-demo-link').hidden = !isDemo;
+  $('#payload-summary-label').textContent = isDemo ? 'View example payloads' : 'Paste or import your responses';
+  $('#payload-summary-note').textContent = isDemo ? 'Editing an example starts a custom comparison.' : 'Auto detect · JSON and JSON Lines · no upload';
+}
+
+function clearPayloads({ focus = true } = {}) {
+  cancelImports(); workspaceMode = 'own'; consumer.dropDemo();
+  for (const side of ['before', 'after']) { $(`#${side}-input`).value = ''; names[side] = `${side}.json`; $(`#${side}-name`).textContent = names[side]; $(`#${side}-format`).value = 'auto'; }
+  result = null; selected = null; dirty = false; error();
+  $('#results').hidden = false; $('#summary-cards').hidden = true; $('.result-grid').hidden = true; $('#coverage-panel').hidden = true; $('.export-bar').hidden = true;
+  $('#results').classList.remove('stale-results'); $('#results').removeAttribute('aria-label');
+  $('#results-title').textContent = 'Consumer Lens · optional field checks'; setExportEnabled(false);
+  $('#payload-editors').open = true; consumer.render(); updateFormatLabels(); updateIntro();
+  status(consumer.hasRules() ? 'Fresh payloads · your explicit Consumer Lens is retained. You may load only the candidate.' : 'Fresh comparison · paste both responses. No demo rules are active.');
+  if (focus) $('#before-input').focus();
+}
+
+function adoptOwnData(side) {
+  if (workspaceMode !== 'demo') return;
+  const text = $(`#${side}-input`).value;
+  clearPayloads({ focus: false });
+  $(`#${side}-input`).value = text;
+}
+
+async function copyText(text, title, success) {
+  try {
+    if (!navigator.clipboard?.writeText) throw new Error('Clipboard unavailable');
+    await navigator.clipboard.writeText(text); status(success); feedback(success);
+  } catch {
+    $('#copy-title').textContent = title; $('#copy-text').value = text;
+    $('#copy-text').rows = text.includes('\n') ? 10 : 3;
+    $('#copy-dialog').showModal(); $('#copy-text').focus(); $('#copy-text').select();
+    status('Clipboard unavailable · a selectable copy is open. Nothing was uploaded.');
+  }
 }
 
 async function importFile(side, file) {
   if (!file) return;
+  if (workspaceMode === 'demo') { clearPayloads({ focus: false }); }
   const ticket = ++importVersion[side];
   markDirty();
   if (file.size > 2 * 1024 * 1024) { error('Each input must be 2 MiB or smaller. Use a representative subset.'); status('Import rejected · previous results need a fresh comparison.'); return; }
@@ -186,9 +262,8 @@ async function importFile(side, file) {
     $(`#${side}-input`).value = text;
     names[side] = file.name;
     $(`#${side}-name`).textContent = file.name;
-    // Format is shared. Choose it deliberately; never silently reinterpret the other side.
     markDirty();
-    status(`Loaded ${file.name} into ${side}. Select its input format, then compare.`);
+    status(`Loaded ${file.name} into ${side}. Auto detect is ready; compare when your inputs are complete.`);
   } catch (e) { if (ticket === importVersion[side]) error(e.message); }
   finally { importing--; $('#compare-button').disabled = importing > 0; }
 }
@@ -207,29 +282,37 @@ $('#examples-button').addEventListener('click', () => {
   dialog.showModal();
 });
 ['#how-it-works-button', '#method-button'].forEach(id => $(id).addEventListener('click', () => $('#help-dialog').showModal()));
-$('#import-button').addEventListener('click', () => { status('Choose the baseline file first. Use each card’s Upload button for the other side.'); $('#before-file').click(); });
+$('#import-button').addEventListener('click', () => { $('#before-file').click(); });
 $$('[data-upload]').forEach(button => button.addEventListener('click', () => $(`#${button.dataset.upload}-file`).click()));
 for (const side of ['before', 'after']) {
-  $(`#${side}-input`).addEventListener('input', () => { importVersion[side]++; names[side] = `pasted-${side}.${$('#input-format').value}`; $(`#${side}-name`).textContent = names[side]; markDirty(); });
+  $(`#${side}-input`).addEventListener('input', () => { adoptOwnData(side); importVersion[side]++; names[side] = `pasted-${side}`; $(`#${side}-name`).textContent = names[side]; markDirty(); });
   $(`#${side}-file`).addEventListener('change', event => { importFile(side, event.target.files[0]); event.target.value = ''; });
   const card = $(`.${side}-card`);
   card.addEventListener('dragover', event => { event.preventDefault(); card.classList.add('drag-over'); });
   card.addEventListener('dragleave', event => { if (!card.contains(event.relatedTarget)) card.classList.remove('drag-over'); });
   card.addEventListener('drop', event => { event.preventDefault(); card.classList.remove('drag-over'); if (event.dataTransfer.files.length !== 1) { error('Drop one file per card.'); return; } importFile(side, event.dataTransfer.files[0]); });
 }
-$('#input-format').addEventListener('change', () => { updateFormatLabels(); markDirty(); });
+for (const side of ['before', 'after']) $(`#${side}-format`).addEventListener('change', markDirty);
 $('#swap-button').addEventListener('click', () => {
   cancelImports();
   const value = $('#before-input').value; $('#before-input').value = $('#after-input').value; $('#after-input').value = value;
   [names.before, names.after] = [names.after, names.before];
+  const format = $('#before-format').value; $('#before-format').value = $('#after-format').value; $('#after-format').value = format;
   for (const side of ['before', 'after']) $(`#${side}-name`).textContent = names[side];
   markDirty(); compare(true);
 });
-$('#clear-button').addEventListener('click', () => {
-  cancelImports();
-  for (const side of ['before', 'after']) { $(`#${side}-input`).value = ''; names[side] = `${side}.${$('#input-format').value}`; $(`#${side}-name`).textContent = names[side]; }
-  result = null; selected = null; dirty = false; error(); $('#results').hidden = false; $('#summary-cards').hidden = true; $('.result-grid').hidden = true; $('#coverage-panel').hidden = true; $('.export-bar').hidden = true; $('#results-title').textContent = 'Consumer Lens · ready for new samples'; setExportEnabled(false); status('Fresh payloads · your lens is retained. Import a lens or load candidate samples to check it.'); $('#before-input').focus();
-  consumer.render();
+$('#clear-button').addEventListener('click', () => clearPayloads());
+$('#start-own').addEventListener('click', () => clearPayloads());
+$('#show-results').addEventListener('click', () => {
+  const target = consumer.hasRules() ? $('#consumer-panel') : $('#results');
+  target.tabIndex = -1; target.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' }); target.focus({ preventScroll: true });
+});
+$('#copy-review').addEventListener('click', () => { if (result && !dirty) copyText(toReviewSummary(report()), 'Copy review summary', 'Review summary copied · structure only. Inspect field names before sharing.'); });
+$('#copy-demo-link').addEventListener('click', () => {
+  const url = new URL('https://qsxustc.github.io/payload-radar/');
+  if (demoKey === 'checkout') { url.searchParams.set('lens', demoLensKey); url.hash = 'consumer-panel'; }
+  else { url.searchParams.set('demo', demoKey); url.hash = 'results'; }
+  copyText(url.href, 'Copy built-in demo link', 'Built-in demo link copied · your payloads and custom rules are not included.');
 });
 $('#severity-filters').addEventListener('click', event => { const button = event.target.closest('[data-severity]'); if (!button || !result) return; severity = button.dataset.severity; pageIndex = 0; renderList(); renderDetail(); });
 $('#change-search').addEventListener('input', () => { if (result) { pageIndex = 0; renderList(); renderDetail(); } });
@@ -241,9 +324,10 @@ consumer = createConsumerUI({
   getResult: () => result,
   isDirty: () => dirty,
   onUpdate: () => { pageIndex = 0; if (result && !dirty) render(); else consumer.render(); },
-  onDemo: key => { loadDemo('checkout'); consumer.preset(key); },
+  onDemo: key => { loadDemo('checkout'); demoLensKey = key; consumer.preset(key); },
   download,
 });
-loadDemo(demoKey);
-const requestedLens = new URL(location.href).searchParams.get('lens');
-if (requestedLens === 'email') consumer.preset('email');
+const query = new URL(location.href).searchParams;
+const requestedDemo = query.get('demo');
+loadDemo(Object.hasOwn(demos, requestedDemo) ? requestedDemo : demoKey);
+if (query.get('lens') === 'email' && demoKey === 'checkout') { demoLensKey = 'email'; consumer.preset('email'); }

@@ -3,19 +3,23 @@
 <p align="center"><strong>Your API changed. Does your app care?</strong></p>
 <p align="center">Consumer Lens + JSON drift inspector · Browser + CLI · Zero dependencies · MIT</p>
 <p align="center">English · <a href="README.zh-CN.md">简体中文</a></p>
-<p align="center"><a href="https://qsxustc.github.io/payload-radar/?lens=checkout"><strong>Try Consumer Lens</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
+<p align="center"><a href="https://qsxustc.github.io/payload-radar/?lens=checkout#consumer-panel"><strong>Try the interactive review</strong></a> · <a href="https://github.com/qsxustc/payload-radar">GitHub</a> · <a href="https://github.com/qsxustc/payload-radar/actions/workflows/ci.yml">CI</a></p>
 
 A payload can drift in nine places while your checkout only depends on two fields. **Consumer Lens** lets you select those fields, state the types and presence your code needs, and check candidate samples against that small, portable set of rules.
 
 Pick `total` and `items[].quantity` as required numbers. A changed shipment field stays outside your focus; `total: "84.50"` fails your selected rule. Export a value-free `.lens.json` file, commit it next to your code, and run the same check in CI—with no baseline payload, backend, API key or dependencies.
 
-The original before/after inspector is still here: compare JSON or JSON Lines samples, review structural drift, and inspect the local evidence behind each finding. A lens adds an explicit consumer perspective; you decide which fields matter.
+Open a ready-made review, see the relevant failures immediately, then choose **Use my own JSON**. Each side automatically detects JSON or JSON Lines, so a pretty-printed response can be compared directly with a JSONL sample set. **Copy review summary** gives you a compact Markdown review for a pull request, with structural findings and consumer checks but no raw sample values.
 
-![Consumer Lens narrows nine checkout findings to two dependent fields and shows candidate rule violations](assets/consumer-demo.jpg)
+![Payload Radar opens with a ready-made review, a clear route to your own JSON and a copyable review summary](assets/first-run-demo.jpg)
 
 ## Try it in a minute
 
-Open the [Consumer Lens demo](https://qsxustc.github.io/payload-radar/?lens=checkout) to explore immediately. Or run it locally:
+Open the [interactive checkout review](https://qsxustc.github.io/payload-radar/?lens=checkout#consumer-panel). The synthetic example is already compared, its payload editors start collapsed, and the Checkout UI lens focuses nine structural findings down to two relevant paths. **See example results** takes you to the review; **View example payloads** opens the inputs when you want the details.
+
+To try an actual response, choose **Use my own JSON**, paste or import the two sides, and compare. Untouched example rules are removed so checkout assumptions do not follow your own data. Rules you explicitly edited or imported are retained. Each editor has its own **Auto detect / JSON / JSON Lines** control and shows the detected format after comparison.
+
+Or run it locally:
 
 ```sh
 git clone https://github.com/qsxustc/payload-radar.git
@@ -23,7 +27,7 @@ cd payload-radar
 npm run dev
 ```
 
-Open **http://127.0.0.1:5190**. Requires **Node.js 20 or newer**; there is no dependency installation step. The app opens with a synthetic checkout example ready to inspect. Use **Examples** for a webhook edge case or a release whose values change while its shape stays the same.
+Open **http://127.0.0.1:5190**. Requires **Node.js 20 or newer**; there is no dependency installation step. Use **Examples** for a webhook edge case or a release whose values change while its shape stays the same.
 
 You can also run the CLI immediately:
 
@@ -35,12 +39,12 @@ node bin/payload-radar.js \
 
 ## From noisy drift to a consumer check
 
-1. Load baseline and candidate JSON/JSONL samples in the [workbench](https://qsxustc.github.io/payload-radar/?lens=checkout).
+1. Choose **Use my own JSON** in the [workbench](https://qsxustc.github.io/payload-radar/?lens=checkout#results), then paste or import baseline and candidate samples. Browser format detection runs independently on each side.
 2. In **Consumer Lens**, select only fields the consuming code reads. Baseline observations help you start; review the allowed types and whether each field is required.
 3. Inspect candidate violations and focus the drift list on related paths. A container rule checks that container's type; add child rules for child fields you depend on.
 4. Export the `.lens.json` file. It contains the lens name and explicit rules, without sample values or the complete inferred baseline shape. Import it in another session, or commit it for CI.
 
-Already have a lens? Import it and load **only the candidate**; the baseline can stay empty. **Clear inputs** keeps the current lens so you can check a new response without rebuilding your rules. Baseline/candidate drift is available when both sides are loaded; candidate-only mode reports the consumer check. Markdown and JSON review exports include that check.
+Already have a lens? Import it and load **only the candidate**; the baseline can stay empty. **Clear inputs** keeps rules you edited or imported, so you can check a new response without rebuilding them. Untouched demo presets are cleared when you start using your own data. Baseline/candidate drift is available when both sides are loaded; candidate-only mode reports the consumer check. Markdown and JSON review exports include that check.
 
 After downloading a lens from the browser, check a new payload with one command:
 
@@ -61,8 +65,17 @@ node bin/payload-radar.js check \
 
 A passing lens means these candidate samples met your chosen rules. It does not prove every future response, the rest of the payload, or the complete API contract is compatible.
 
+## Take the review into a pull request
+
+After comparing your samples, choose **Copy review summary**. The compact Markdown includes sample counts, severity totals, structural paths and any explicit consumer-check results. It leaves out raw payload values. Paste it into your pull request or issue yourself; the app does not post anything or upload the review.
+
+If clipboard access is unavailable, a dialog selects the same text for manual copying. **Copy demo link** shares only a built-in synthetic example. Your payloads and lens contents are never encoded into that URL. Names and structural paths may still be sensitive, so review copied or downloaded text before sharing it.
+
 ## What you get
 
+- **A quick first review:** a ready-made synthetic result, collapsed example inputs, and an explicit route to your own JSON.
+- **Independent format detection:** mix JSON and JSON Lines between sides, see what was detected, and override either side when needed.
+- **Copyable review context:** a compact value-free Markdown summary for your PR, with a manual-copy fallback.
 - **Consumer Lens:** select dependent paths, edit allowed types and required presence, inspect candidate rule results, and export/import portable value-free rules.
 - **Structural findings:** missing observed fields, new fields, new value types, first-observed nulls, presence shifts and empty-array evidence gaps.
 - **Evidence you can inspect:** select a finding to see observed values and absence locations, with sample numbers and paths. The inspector displays up to six observations per side.
@@ -73,14 +86,16 @@ A passing lens means these candidate samples met your chosen rules. It does not 
 
 ## Understand the input format
 
-Choose one format for both sides. Files must contain UTF-8 text.
+The browser defaults to **Auto detect independently on each side**. It first reads the entire input as one JSON document. Only a JSON syntax failure triggers a JSON Lines attempt; safety-limit and non-finite-number failures remain errors. Each editor can explicitly override the format. Files must contain UTF-8 text.
 
 | Format | Meaning | Example |
 | --- | --- | --- |
 | JSON | One complete document is one sample, even if it is an array | `[{"id":1},{"id":2}]` is one array sample |
 | JSONL / JSON Lines | Each nonempty line is one complete JSON sample | Two lines containing `{"id":1}` and `{"id":2}` are two object samples |
 
-Blank JSONL lines are ignored. Pretty-printed multiline objects belong in JSON mode. Input limits are **2 MiB per side**, **1,000 top-level samples**, **64 nesting levels**, and **50,000 visited values per side**. Large inputs should be reduced to a representative subset.
+Blank JSONL lines are ignored. Pretty-printed multiline JSON is detected as JSON; a single valid JSONL line is detected as one JSON document with the same sample meaning. A top-level array stays one document in Auto mode. **CLI `--format` remains `json|jsonl` and applies to both diff inputs**; its default is still `json`. Browser Auto detection does not change CLI or core-engine parsing semantics.
+
+Input limits are **2 MiB per side**, **1,000 top-level samples**, **64 nesting levels**, and **50,000 visited values per side**. Large inputs should be reduced to a representative subset.
 
 Field names are limited to **1,024 UTF-16 code units** each. A cumulative structural path is limited to **4,096 UTF-16 code units**, counting each property name plus one separator and each array-item step as two units. Across all findings, the combined UTF-8 size of the individually JSON-encoded `{ id, path, pointer, tokens }` objects must not exceed **2 MiB**. This is a budget for finding locations, not a limit on the entire exported report. Shorten field names or compare smaller sample groups when a limit is reached.
 
@@ -134,7 +149,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: qsxustc/payload-radar@v0.2.0
+      - uses: qsxustc/payload-radar@v0.3.0
         with:
           lens: contracts/checkout.lens.json
           candidate: fixtures/checkout-after.jsonl
@@ -208,7 +223,7 @@ npm run build       # writes a static app to dist/
 npm run preview     # serves dist/ on http://127.0.0.1:5190
 ```
 
-Use `npm run dev -- --port 5191` or `npm run preview -- --port 5191` to select another port. The development server binds to loopback and serves only app assets. Builds copy `index.html`, `src/`, `assets/` and `examples/`; local metadata and CLI code are not deployed.
+Use `npm run dev -- --port 5191` or `npm run preview -- --port 5191` to select another port. The development server binds to loopback and serves only app assets. Builds copy `index.html`, `src/`, `assets/` and `examples/`; local metadata and CLI code are not deployed. Built CSS/JavaScript entry URLs and relative static module imports carry one stable content-based build ID, so a refreshed deployment loads a consistent module graph. Source files stay unchanged.
 
 The included [Pages workflow](.github/workflows/pages.yml) tests and builds on `main` pushes or manual dispatch, then deploys `dist/`. Enable **GitHub Actions** as the Pages source in repository settings. All asset paths are relative, so the static app can also be hosted under a subdirectory or on another static host.
 

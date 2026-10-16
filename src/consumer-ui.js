@@ -17,6 +17,9 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
   let fieldShape = null;
   let cache = null;
   let lensImportVersion = 0;
+  // Example assumptions should never silently follow the user's own payloads.
+  // Explicit edits and imported lenses belong to the user and survive that switch.
+  let origin = 'none';
 
   function value() {
     if (!rules.length) return null;
@@ -42,6 +45,7 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
     const next = nextRules.length ? normalizeLens({ kind: 'payload-radar-consumer', schemaVersion: 1, name: nextName, rules: nextRules }) : { name: nextName, rules: [] };
     rules = next.rules;
     committedName = next.name;
+    origin = 'user';
     notify();
   }
   function edit(nextRules) {
@@ -54,15 +58,35 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
     committedName = normalized.name;
     $('#lens-name').value = normalized.name;
     $('#lens-focus').checked = true;
+    origin = 'user';
     notify();
+  }
+  function reset(notifyChange = true) {
+    rules = [];
+    committedName = 'My consumer';
+    $('#lens-name').value = committedName;
+    $('#lens-focus').checked = false;
+    cache = null;
+    origin = 'none';
+    // Starting a new workspace also supersedes any in-flight lens file read.
+    lensImportVersion++;
+    $('#lens-json-input').value = '';
+    $('#lens-import-error').hidden = true;
+    if (notifyChange) notify();
+  }
+  function dropDemo() {
+    if (origin !== 'demo') return false;
+    reset(false);
+    return true;
   }
   function preset(key, notifyChange = true) {
     const source = PRESETS[key];
-    if (!source) { rules = []; $('#lens-focus').checked = false; cache = null; return; }
+    if (!source) { reset(false); return; }
     rules = source.rules.map(rule => ({ ...rule, tokens: [...rule.tokens], types: [...rule.types] }));
     committedName = source.name;
     $('#lens-name').value = source.name;
     $('#lens-focus').checked = true;
+    origin = 'demo';
     if (notifyChange) notify(); else cache = null;
   }
   function fields(shape) {
@@ -104,8 +128,9 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
     $('#lens-add').disabled = !fieldOptions.length || dirty || rules.length >= CONSUMER_LIMITS.rules;
     $('#lens-export').disabled = !rules.length;
     $('#lens-clear').disabled = !rules.length;
-    const format = $('#input-format').value === 'jsonl' ? 'jsonl' : 'json';
-    $('#lens-ci-snippet').textContent = `- uses: actions/checkout@v4\n- uses: qsxustc/payload-radar@v0.2.0\n  with:\n    lens: consumer.lens.json\n    candidate: candidate.${format}\n    format: ${format}`;
+    const preference = $('#after-format').value;
+    const format = !dirty && ['json', 'jsonl'].includes(result?.afterFormat) ? result.afterFormat : ['json', 'jsonl'].includes(preference) ? preference : null;
+    $('#lens-ci-snippet').textContent = !format ? 'Compare the candidate to detect its format before generating an exact CI command, or choose JSON / JSON Lines explicitly.' : `- uses: actions/checkout@v4\n- uses: qsxustc/payload-radar@v0.3.0\n  with:\n    lens: consumer.lens.json\n    candidate: candidate.${format}\n    format: ${format}`;
     $('#lens-focus').disabled = !rules.length || !result?.before.length || dirty;
     const checked = check();
     const related = result && rules.length ? relatedChanges(result.changes, value()) : [];
@@ -116,7 +141,7 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
       const report = checked?.results[index];
       return `<article class="lens-rule"><div class="lens-rule-top"><code>${escape(pathLabel(rule.tokens))}</code><div>${report ? `<span class="lens-state ${report.status}">${report.status === 'fail' ? 'VIOLATION' : report.status === 'review' ? 'UNOBSERVED' : 'PASS'}</span>` : ''}<button type="button" class="lens-remove" data-remove-rule="${index}" aria-label="Remove ${escape(pathLabel(rule.tokens))}">Remove</button></div></div><div class="lens-rule-options"><fieldset class="lens-types"><legend>Allowed types</legend>${TYPES.map(type => `<label><input type="checkbox" data-rule="${index}" data-rule-type="${type}" ${rule.types.includes(type) ? 'checked' : ''}>${type}</label>`).join('')}</fieldset><label class="lens-required"><input type="checkbox" data-required-rule="${index}" ${rule.required ? 'checked' : ''}>Required path</label></div>${report ? `<div class="lens-rule-check">${report.present} present · ${report.missing} missing · ${report.mismatched} wrong type${report.emptyArrays ? ` · ${report.emptyArrays} empty arrays` : ''}</div>${report.examples.length ? `<details class="lens-failures"><summary>See ${report.examples.length} failure location${report.examples.length === 1 ? "" : "s"}</summary>${report.examples.map(example => `<span>Sample ${example.sample} <code>${escape(example.pointer || '(root)')}</code>: ${example.reason === 'missing' ? 'path unavailable' : `${escape(example.actual)} → expected ${escape(example.expected.join(' | '))}`}</span>`).join('')}</details>` : report.status === 'review' ? '<p class="lens-failures">No field values observed. Empty arrays and absent optional paths cannot verify the allowed types.</p>' : ''}` : ''}</article>`;
     }).join('') : '<p class="lens-empty">Your consumer does not use every field. Protect only its actual dependencies, then export a small <code>.lens.json</code> file for CI.</p>';
-    $('#lens-rule-list').querySelectorAll('[data-remove-rule]').forEach(button => button.addEventListener('click', () => { rules.splice(Number(button.dataset.removeRule), 1); if (!rules.length) $('#lens-focus').checked = false; notify(); }));
+    $('#lens-rule-list').querySelectorAll('[data-remove-rule]').forEach(button => button.addEventListener('click', () => { rules.splice(Number(button.dataset.removeRule), 1); origin = rules.length ? 'user' : 'none'; if (!rules.length) $('#lens-focus').checked = false; notify(); }));
     $('#lens-rule-list').querySelectorAll('[data-rule-type]').forEach(input => input.addEventListener('change', () => {
       const rule = rules[Number(input.dataset.rule)];
       const type = input.dataset.ruleType;
@@ -134,7 +159,7 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
     catch (error) { $('#lens-name').value = committedName; render(); $('#lens-status').textContent = error.message; }
   });
   $('#lens-focus').addEventListener('change', onUpdate);
-  $('#lens-clear').addEventListener('click', () => { rules = []; $('#lens-focus').checked = false; notify(); });
+  $('#lens-clear').addEventListener('click', () => reset());
   $('#lens-demo').addEventListener('click', () => onDemo('checkout'));
   $('#lens-email-demo').addEventListener('click', () => onDemo('email'));
   $('#lens-export').addEventListener('click', () => { try { const lens = value(); if (lens) download(serializeLens(lens), 'consumer.lens.json', 'application/json'); } catch (error) { $('#lens-status').textContent = error.message; } });
@@ -159,5 +184,5 @@ export function createConsumerUI({ getResult, isDirty, onUpdate, onDemo, downloa
       $('#lens-import-error').hidden = true;
     } catch (error) { if (ticket === lensImportVersion) { $('#lens-import-error').textContent = error.message; $('#lens-import-error').hidden = false; } }
   });
-  return { render, value, check, focus, protect, preset, hasRules: () => rules.length > 0 };
+  return { render, value, check, focus, protect, preset, dropDemo, reset, isDemo: () => origin === 'demo', hasRules: () => rules.length > 0 };
 }
